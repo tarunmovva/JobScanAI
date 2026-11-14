@@ -10,7 +10,7 @@ import { threadStartParams, turnStartParams } from './codex-requests'
 import { CORE_METHODS, isProtocolError, createStartupCrashCounter } from './codex-health'
 import { warmBinary } from './binary-warmup'
 import { RATE_LIMITS_READ, mapRateLimits, loginStatusFrom } from './codex-account'
-import { codexHome, e2eCodexCommand } from './codex-home'
+import { codexHome, e2eCodexCommand, E2E_NO_CODEX } from './codex-home'
 import { EarlyTurnEvents } from './turn-buffer'
 import type { CodexModelOption, RateLimitSnapshot } from '../src/types'
 
@@ -63,6 +63,16 @@ export function getCodexBinaryPath(): string | null {
   // Under E2E_TEST the Python side must not find a real Codex through us.
   if (e2eCodexCommand()) return null
   return resolveCodexNativeBinary()
+}
+
+/**
+ * Is there a Codex to run? What the sign-in screen and Settings show. Under
+ * e2e only the stand-in a test names counts -- never the user's real one.
+ */
+export function codexInstalled(): boolean {
+  const e2e = e2eCodexCommand()
+  if (e2e) return e2e.command !== E2E_NO_CODEX
+  return resolveCodexNativeBinary() !== null
 }
 
 export function buildSpawnEnv(): NodeJS.ProcessEnv {

@@ -37,7 +37,14 @@ test.setTimeout(240_000)
 
 interface Run { app: ElectronApplication; page: Page; root: string; userData: string; files: Record<string, string> }
 
-async function start(engine: 'claude' | 'codex', extra: Record<string, unknown> = {}): Promise<Run> {
+/**
+ * `signedIn: false` leaves Codex signed out; `codexStandIn: false` gives the
+ * app no Codex at all (under e2e it can never find the user's real one).
+ */
+async function start(
+  engine: 'claude' | 'codex', extra: Record<string, unknown> = {},
+  opts: { signedIn?: boolean; codexStandIn?: boolean } = {},
+): Promise<Run> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), `jobscan-e2e-${engine}-`))
   const exe = buildTinyDb(JOBSCAN, root)
   const userData = path.join(root, 'userdata')
@@ -49,7 +56,7 @@ async function start(engine: 'claude' | 'codex', extra: Record<string, unknown> 
     tripwire: path.join(root, 'codex-started.marker'),
     codexHome,
   }
-  if (engine === 'codex') fs.writeFileSync(path.join(codexHome, 'auth.json'), '{"fixture":true}')
+  if (engine === 'codex' && opts.signedIn !== false) fs.writeFileSync(path.join(codexHome, 'auth.json'), '{"fixture":true}')
   fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({
     aiEngine: engine,
     jobscanExePath: exe,
@@ -73,7 +80,7 @@ async function start(engine: 'claude' | 'codex', extra: Record<string, unknown> 
       ...process.env,
       E2E_TEST: '1',
       JOBSCAN_USER_DATA_DIR: userData,
-      JOBSCAN_E2E_CODEX_COMMAND: JSON.stringify(codexCommand),
+      JOBSCAN_E2E_CODEX_COMMAND: opts.codexStandIn === false ? '' : JSON.stringify(codexCommand),
       CODEX_TRIPWIRE: files.tripwire,
       FAKE_MODE: 'oracle', FAKE_ORACLE: ORACLE, FAKE_PROMPT_LOG: files.codexLog,
       JOBSCAN_CLAUDE_BIN: FAKE_CLAUDE,
@@ -217,4 +224,28 @@ test('parity: Codex and Claude Code get the same prompts and leave the same resu
   expect(claude.queries).toEqual(codex.queries)
   expect(Object.keys(codex.ratings).length).toBeGreaterThan(40)
   expect(claude.ratings).toEqual(codex.ratings)
+})
+
+test('Codex mode: sign-in offers ChatGPT when a Codex is found, and says how to install one when none is', async () => {
+  const found = await start('codex', {}, { signedIn: false })
+  try {
+    await expect(found.page.getByRole('button', { name: /Login with ChatGPT/ })).toBeVisible({ timeout: 15_000 })
+    await expect(found.page.getByText('The Codex CLI was not found on this computer.')).toHaveCount(0)
+    expect((await invoke<{ codexFound?: boolean }>(found.page, 'settings:get')).codexFound).toBe(true)
+  } finally {
+    await finish(found)
+  }
+
+  const missing = await start('codex', {}, { signedIn: false, codexStandIn: false })
+  try {
+    await expect(missing.page.getByText('The Codex CLI was not found on this computer.')).toBeVisible({ timeout: 15_000 })
+    await expect(missing.page.getByText('npm install -g @openai/codex')).toBeVisible()
+    await expect(missing.page.getByRole('button', { name: /Login with ChatGPT/ })).toHaveCount(0)
+    expect((await invoke<{ codexFound?: boolean }>(missing.page, 'settings:get')).codexFound).toBe(false)
+    // Signing in without a Codex says so instead of failing somewhere deeper.
+    const login = await invoke<{ success: boolean; message?: string }>(missing.page, 'auth:login')
+    expect(login.success).toBe(false)
+  } finally {
+    await finish(missing)
+  }
 })

@@ -17,8 +17,9 @@
  *    binary named by JOBSCAN_CLAUDE_BIN.
  *
  * Env: SMOKE_CLAUDE_BIN (default: claude.exe in ~/.local/bin or on PATH),
- *      SMOKE_MODEL (default sonnet), SMOKE_JOBSCAN_EXE (default: the main
- *      checkout's jobscan/jobscan.exe), SMOKE_KEEP=1 keeps the scratch folder.
+ *      SMOKE_MODEL (default sonnet), SMOKE_JOBSCAN_EXE (default: this
+ *      checkout's jobscan/jobscan.exe, built by `npm run setup`), SMOKE_KEEP=1
+ *      keeps the scratch folder.
  */
 import { test, expect, _electron as electron } from '@playwright/test'
 import { execSync } from 'child_process'
@@ -49,7 +50,7 @@ function scratch(): { root: string; exe: string; userData: string; env: Record<s
   const data = path.join(bin, 'data')
   fs.mkdirSync(data, { recursive: true })
   const exeSource = process.env['SMOKE_JOBSCAN_EXE']
-    ?? path.resolve(REPO, '..', 'jobscan-ai', 'jobscan', process.platform === 'win32' ? 'jobscan.exe' : 'jobscan')
+    ?? path.join(REPO, 'jobscan', process.platform === 'win32' ? 'jobscan.exe' : 'jobscan')
   const exe = path.join(bin, path.basename(exeSource))
   fs.copyFileSync(exeSource, exe)
   for (const [platform, slugs] of Object.entries(BOARDS)) {

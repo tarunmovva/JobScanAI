@@ -6,7 +6,7 @@ import { isOpenableRecordFile } from './record-files'
 import { appliedKeys, isApplied } from './applied-jobs'
 import {
   clearCodexClient, getCodexSpawnSpec, buildSpawnEnv, listCodexModels, codexLoginStatus, warmCodex,
-  reconcileSavedModel, getCodexBinaryPath,
+  reconcileSavedModel, codexInstalled,
 } from './codex-client'
 import { focusApplicationTab } from './chrome-tabs'
 import { automatorPython } from './cli-runner'
@@ -233,7 +233,7 @@ export function registerIpcHandlers(): void {
     }
     return {
       loggedIn, engine: claude ? 'claude' : 'codex',
-      ...(claude ? { claudeFound: claudeBinary() !== null } : { codexFound: getCodexBinaryPath() !== null }),
+      ...(claude ? { claudeFound: claudeBinary() !== null } : { codexFound: codexInstalled() }),
     }
   })
 
@@ -513,7 +513,7 @@ export function registerIpcHandlers(): void {
     claudePath: store.get('claudePath') ?? '',
     claudeFound: claudeBinary() !== null,
     codexPath: store.get('codexPath') ?? '',
-    codexFound: getCodexBinaryPath() !== null,
+    codexFound: codexInstalled(),
   }))
 
   ipcMain.handle('settings:save', async (_e, partial: Record<string, unknown>) => {
