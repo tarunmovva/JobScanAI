@@ -29,7 +29,9 @@ async function probe(mode, opts = {}, command = process.execPath) {
   const env = { ...process.env, FAKE_MODE: mode, FAKE_LOG: log }
   const r = await probeAppServer(
     { command, args: [FAKE, 'app-server'], env, loginStatus: { command, args: [FAKE, 'login', 'status'] } },
-    { turn: true, savedModel: '', cwd: os.tmpdir(), timeoutMs: 3000, ...opts },
+    // Generous: a cold start on a slow CI runner took over 3 s for a full
+    // turn. Only the test that expects a timeout passes a short one.
+    { turn: true, savedModel: '', cwd: os.tmpdir(), timeoutMs: 15000, ...opts },
   )
   const sent = fs.existsSync(log) ? fs.readFileSync(log, 'utf-8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []
   return { r, sent }

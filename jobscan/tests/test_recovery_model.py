@@ -13,6 +13,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -31,7 +32,11 @@ class RecoveryModelTests(unittest.TestCase):
 
     def test_the_model_is_always_passed_explicitly(self):
         # The bug was an absent -m, which silently inherits config.toml.
-        argv = ar._build_codex_argv(Path("."))
+        # Pretend Codex is installed: without it the builder returns None,
+        # and a CI runner has no Codex.
+        with mock.patch.object(ar, "_resolve_codex", return_value=["codex"]):
+            argv = ar._build_codex_argv(Path("."))
+        self.assertIsNotNone(argv)
         self.assertIn("-m", argv, "no -m means config.toml decides, not us")
         self.assertTrue(argv[argv.index("-m") + 1].strip())
 
