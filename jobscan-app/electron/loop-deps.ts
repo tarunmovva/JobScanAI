@@ -15,6 +15,7 @@ import { cliDbExec } from './cli-runner'
 import { skipPlatformSql } from './queue-sql'
 import { closeTabsFor } from './chrome-tabs'
 import { aiEngine, selectedEngineId } from './ai-engine'
+import { noticeEvent } from './notice-hub'
 import { appliedKeys, isApplied } from './applied-jobs'
 import { queriesStale } from './loop-policy'
 import { extractFailures } from './selection'
@@ -123,6 +124,7 @@ export function createLoopDeps(getWindow: () => BrowserWindow | null): LoopDeps 
       }
     },
     emit: status => {
+      noticeEvent('loop:status', status)
       const win = getWindow()
       try {
         if (!win || win.isDestroyed()) return

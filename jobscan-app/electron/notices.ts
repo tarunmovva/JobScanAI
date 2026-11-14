@@ -25,6 +25,15 @@ const AI_KINDS = new Set(['query_gen', 'rating', 'payload'])
 const AI_OUTCOMES = new Set(['ok', 'error', 'exited', 'timeout', 'canceled'])
 const APPLY_STATES = new Set(['working', 'done', 'submitted', 'failed', 'skipped', 'needs_you', 'error'])
 
+/** The window's write actions, as named in its IPC channels. */
+const USER_ACTIONS = new Set([
+  'resume:upload', 'resume:browse', 'profile:save', 'pipeline:start-query-gen', 'pipeline:add-user-queries',
+  'pipeline:start-rating', 'pipeline:start-extract', 'pipeline:start-payload-gen', 'pipeline:reset',
+  'pipeline:goto-state', 'selection:confirm', 'settings:save', 'engine:set', 'fetch:start', 'fetch:cancel',
+  'applied-jobs:clear', 'profiles:create', 'profiles:switch', 'profiles:rename', 'profiles:delete',
+  'loop:start', 'loop:stop', 'loop:save-settings', 'imap:save-config', 'auth:login', 'auth:logout',
+])
+
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
 const pick = (v: unknown, allowed: Set<string>): string | undefined =>
   (typeof v === 'string' && allowed.has(v) ? v : undefined)
@@ -51,6 +60,11 @@ export type NoticeInput = [type: string, fields: Record<string, unknown>]
 export function noticesFromEvent(channel: string, payload: unknown): NoticeInput[] {
   const p = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>
   switch (channel) {
+    case 'user_action': {
+      // The user clicked something in the window: which action, nothing more.
+      const action = pick(p['action'], USER_ACTIONS)
+      return action ? [['user_action', { action }]] : []
+    }
     case 'state:change': return [['state', { state: pick(p['state'], APP_STATES) }]]
     case 'pipeline:idle': return [['idle', {}]]
     case 'pipeline:canceled': return [['canceled', {}]]

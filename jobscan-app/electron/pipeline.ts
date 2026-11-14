@@ -16,6 +16,7 @@ import {
 } from './codex-client'
 import { buildAndWritePayload } from './payload-builder'
 import { aiEngine } from './ai-engine'
+import { noticeEvent } from './notice-hub'
 import {
   wasInterrupted, abandonSql, landingState, RUN_STATE_KEYS,
 } from './interrupted-run'
@@ -187,6 +188,8 @@ function push(channel: string, data: unknown): void {
 
 /** To the window only, without touching the board. */
 export function send(channel: string, data: unknown): void {
+  // To the harness first: it hears events even with no window open.
+  noticeEvent(channel, data)
   // Guard against the window being destroyed mid-shutdown — child process
   // close handlers fire AFTER before-quit closes the BrowserWindow, so naive
   // `_win?.webContents.send(...)` throws "Object has been destroyed" in main.

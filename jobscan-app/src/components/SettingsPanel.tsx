@@ -24,6 +24,8 @@ export default function SettingsPanel({ onClose }: Props) {
   const [codexUpdate, setCodexUpdate] = useState<CodexUpdateStatus | null>(null)
   const [checkingCodex, setCheckingCodex] = useState(false)
   const [engineMsg, setEngineMsg] = useState('')
+  const [harness, setHarness] = useState<{ enabled: boolean; connected: boolean }>({ enabled: false, connected: false })
+  const [harnessMsg, setHarnessMsg] = useState('')
   const [showHistory, setShowHistory] = useState(false)
   const [profiles, setProfiles] = useState<ProfileInfo[]>([])
   const [activeProfileId, setActiveProfileId] = useState('')
@@ -105,11 +107,20 @@ export default function SettingsPanel({ onClose }: Props) {
       if (r?.aiEngine !== 'claude') loadCodexInfo()
     })
     ipc.invoke<{ configured: boolean; host?: string; username?: string }>('imap:get-config').then(setImapInfo)
+    ipc.invoke<{ enabled: boolean; connected: boolean }>('harness:get-status')
+      .then(r => { if (aliveRef.current && r) setHarness({ enabled: r.enabled, connected: r.connected }) })
+      .catch(() => { /* switch shows off */ })
     loadProfiles()
     return () => { aliveRef.current = false }
   }, [])
 
   const engine = s.aiEngine ?? 'codex'
+  const toggleHarness = async (enabled: boolean): Promise<void> => {
+    setHarnessMsg('')
+    const r = await ipc.invoke<{ ok: boolean; error?: string; enabled: boolean; connected: boolean }>('harness:set', { enabled })
+    if (!r?.ok) setHarnessMsg(r?.error ?? 'Could not change this right now.')
+    if (r) setHarness({ enabled: r.enabled, connected: r.connected })
+  }
   const switchEngine = async (next: 'codex' | 'claude'): Promise<void> => {
     if (next === engine) return
     setEngineMsg('')
@@ -340,6 +351,24 @@ export default function SettingsPanel({ onClose }: Props) {
             )}
           </div>
           )}
+          <div className="flex flex-col gap-1">
+            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input
+                id="harness-enabled"
+                type="checkbox"
+                checked={harness.enabled}
+                onChange={e => void toggleHarness(e.target.checked)}
+                className="accent-orange-500"
+              />
+              Let Claude Code drive JobScan
+            </label>
+            <p className="text-xs text-gray-500">
+              A Claude Code session with the JobScan plugin can then rebuild, find jobs, rate them and stop the loop,
+              and hears every step as it happens. It can never apply, change settings or open anything.
+              {harness.enabled && (harness.connected ? ' Connected now.' : ' Waiting: run /jobscan:jobscan in Claude Code.')}
+            </p>
+            {harnessMsg && <p className="text-xs text-amber-400">{harnessMsg}</p>}
+          </div>
           {field('ratingAgents', 'Rating Agents (parallel threads)', 'number')}
           {field('payloadAgents', 'Payload Agents (parallel threads)', 'number')}
         </div>

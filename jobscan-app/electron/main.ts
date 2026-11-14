@@ -22,6 +22,7 @@ import { codexHome } from './codex-home'
 import { registerEngines, aiEngine, selectedEngineId } from './ai-engine'
 import { createCodexEngine } from './ai-engine-codex'
 import { createClaudeEngineForApp, disposeClaudeWorkDir } from './ai-engine-claude'
+import { registerHarness, startHarness, stopHarness } from './harness'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -204,7 +205,12 @@ app.whenReady().then(() => {
   }
   loop = createLoop(createLoopDeps(() => win))
   registerLoopIpc(loop)
+  registerHarness(loop)
   createWindow()
+  // "Let Claude Code drive JobScan": off unless the user turned it on.
+  if (store.get('harnessEnabled') === true) {
+    void startHarness().then(r => { if (!r.ok) console.warn('[harness]', r.error) })
+  }
   if (claudeMode) {
     // Claude Code's sign-in is checked by running it, so not before the
     // window: a launch never waits on it. Signed out, the sign-in screen
@@ -292,6 +298,8 @@ app.on('before-quit', (event) => {
     if (looping || isPipelineActive()) {
       try { await cancelActivePipeline('quit') } catch { /* best effort */ }
     }
+    // A driving agent hears that the app is going, then the endpoint closes.
+    try { await stopHarness(true) } catch { /* best effort */ }
     if (selectedEngineId() === 'claude') {
       // The detached rating engine is not under the run's token: stop it
       // first (so a batch that settles now saves nothing), then end every

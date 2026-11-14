@@ -10,6 +10,7 @@ import { focusApplicationTab } from './chrome-tabs'
 import { automatorPython } from './cli-runner'
 import { aiEngine, selectedEngineId, engineIdFrom } from './ai-engine'
 import { claudeBinary } from './ai-engine-claude'
+import { noticeEvent } from './notice-hub'
 import {
   runQueryGen, runUserQueryGen, runRating,
   runExtract, runPayloadGen, runFetch, setState,
@@ -37,7 +38,8 @@ const DESTRUCTIVE_FROM: ReadonlySet<AppState> = new Set(['board'])
 
 // Safe IPC send — guards against the renderer window being destroyed mid-
 // shutdown (child-process error handlers fire after before-quit).
-function safeSendError(message: string): void {
+export function safeSendError(message: string): void {
+  noticeEvent('pipeline:error', { message })
   const win = BrowserWindow.getAllWindows()[0]
   if (!win || win.isDestroyed()) return
   try {
@@ -93,14 +95,20 @@ const loopIsOn = (): boolean => activeLoop?.isOn() === true
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function lockedWhileLooping(channel: string, listener: (e: IpcMainInvokeEvent, ...args: any[]) => unknown): void {
-  ipcMain.handle(channel, (e, ...args) => (loopIsOn() ? { ok: false, error: LOOP_ON } : listener(e, ...args)))
+  ipcMain.handle(channel, (e, ...args) => {
+    if (loopIsOn()) return { ok: false, error: LOOP_ON }
+    // A click in the window, heard by a driving agent: which action only.
+    noticeEvent('user_action', { action: channel })
+    return listener(e, ...args)
+  })
 }
 
 export function registerLoopIpc(loop: Loop): void {
   activeLoop = loop
   ipcMain.handle('loop:get-status', () => loop.status())
-  ipcMain.handle('loop:start', () => loop.start())
+  ipcMain.handle('loop:start', () => { noticeEvent('user_action', { action: 'loop:start' }); return loop.start() })
   ipcMain.handle('loop:stop', async (_e, opts?: { mode?: 'after-round' | 'now' }) => {
+    noticeEvent('user_action', { action: 'loop:stop' })
     if (opts?.mode === 'now') await loop.stopNow()
     else loop.stopAfterRound()
     return { ok: true }
