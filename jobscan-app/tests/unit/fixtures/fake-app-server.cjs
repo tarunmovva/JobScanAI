@@ -55,6 +55,16 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       if (mode === 'turn-no-id') return ok({ turn: {} })
       if (mode === 'config-broken') return err(-32600, 'failed to load configuration: invalid TOML at line 3')
       if (mode === 'input-too-large') return err(-32602, 'input exceeds the maximum length of 1048576 characters', { input_error_code: 'input_too_large' })
+      if (mode === 'burst') {
+        // The reply, the streamed text and the completion in ONE write, so
+        // they reach the client as one chunk. Three separate writes often do
+        // too (macOS pipes are asynchronous); this makes it certain.
+        return process.stdout.write([
+          { jsonrpc: '2.0', id: m.id, result: { turn: { id: 'tu-1' } } },
+          { jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { turnId: 'tu-1', delta: 'OK' } },
+          { jsonrpc: '2.0', method: 'turn/completed', params: { turn: { id: 'tu-1', status: 'completed' } } },
+        ].map(o => JSON.stringify(o) + '\n').join(''))
+      }
       ok({ turn: { id: 'tu-1' } })
       if (mode === 'no-complete') return
       notify('item/agentMessage/delta', { turnId: 'tu-1', delta: 'OK' })

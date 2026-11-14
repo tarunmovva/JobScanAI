@@ -47,6 +47,16 @@ test('a Codex that answers every call this app makes passes, turn and all', asyn
   assert.equal(sent[5].params.input[0].text, PROBE_TEXT)
 })
 
+test('a turn that completes in the same chunk as its turn/start reply still passes', async () => {
+  // Found on a macOS runner: the reply, the streamed text and turn/completed
+  // arrived together, readline handed over all three lines before the turn
+  // id was known, both notifications were dropped, and the check waited out
+  // its whole timeout. Raising the timeout (once 3 s, now 15 s) never helped.
+  const { r } = await probe('burst', { timeoutMs: 3000 })
+  assert.deepEqual(r.verdict, { kind: 'ok' })
+  assert.equal(r.turnChecked, true)
+})
+
 test('the check uses the model a real run would: the saved one when offered, else Auto', async () => {
   const saved = await probe('ok', { savedModel: 'gpt-cheap' })
   assert.equal(saved.r.model, 'gpt-cheap')
