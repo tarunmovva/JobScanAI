@@ -11,6 +11,7 @@ import { threadStartParams, turnStartParams } from './codex-requests'
 import { CORE_METHODS, isProtocolError, createStartupCrashCounter } from './codex-health'
 import { warmBinary } from './binary-warmup'
 import { RATE_LIMITS_READ, mapRateLimits, loginStatusFrom } from './codex-account'
+import { codexHome, e2eCodexCommand } from './codex-home'
 import type { CodexModelOption, RateLimitSnapshot } from '../src/types'
 
 // File-probe codex auth so boot routing doesn't spawn a codex.exe just to
@@ -19,7 +20,7 @@ import type { CodexModelOption, RateLimitSnapshot } from '../src/types'
 // false negatives.
 export function checkAuth(): boolean {
   try {
-    const authPath = path.join(os.homedir(), '.codex', 'auth.json')
+    const authPath = path.join(codexHome(), 'auth.json')
     if (!fs.existsSync(authPath)) return false
     const stat = fs.statSync(authPath)
     return stat.size > 0
@@ -93,6 +94,8 @@ function resolveCodexNativeBinary(): string | null {
  * app-server surface would leave form recovery on a different version.
  */
 export function getCodexBinaryPath(): string | null {
+  // Under E2E_TEST the Python side must not find a real Codex through us.
+  if (e2eCodexCommand()) return null
   return resolveCodexNativeBinary()
 }
 
@@ -140,6 +143,10 @@ export interface CodexSpawnSpec {
 }
 
 export function getCodexSpawnSpec(cliArgs: string[]): CodexSpawnSpec {
+  // Tests: a stand-in app-server, or nothing at all — never the user's Codex.
+  const e2e = e2eCodexCommand()
+  if (e2e) return { command: e2e.command, args: [...e2e.args, ...cliArgs], shell: false }
+
   // Try native binary first on all platforms — avoids the codex.js wrapper which
   // re-spawns the binary without windowsHide, creating visible console windows.
   const native = resolveCodexNativeBinary()

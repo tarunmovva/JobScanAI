@@ -29,6 +29,7 @@ import { recordHeader } from './record-header'
 import { killTree, collectChild, treeSpawnOptions, stopGently } from './proc'
 import { resetSelectedSql, markSkippedSql, abandonOthersSql } from './queue-sql'
 import { closeTabsFor } from './chrome-tabs'
+import { cdpVersionUrl, chromeLaunchArgs } from './cdp'
 import { getRunHooks, type HookJob, type HookResult, type HookView } from './run-mode'
 import {
   carryForward, fingerprintMatches, ratingHealth, FILLER_TIMEOUT_MS, MIXED_FINGERPRINT,
@@ -105,7 +106,7 @@ function checkpoint(t: CancelToken): void {
 
 function isChromeRunning(): Promise<boolean> {
   return new Promise(resolve => {
-    const req = http.get('http://127.0.0.1:9222/json/version', res => {
+    const req = http.get(cdpVersionUrl(), res => {
       resolve(res.statusCode === 200)
     })
     req.on('error', () => resolve(false))
@@ -117,12 +118,7 @@ async function ensureChrome(): Promise<void> {
   if (await isChromeRunning()) return
 
   const profileDir = store.get('jobAutomatorHome') as string
-  const chromeArgs = [
-    '--remote-debugging-port=9222',
-    `--user-data-dir=${path.join(profileDir, 'chrome-cdp-profile')}`,
-    '--no-first-run',
-    '--no-default-browser-check',
-  ]
+  const chromeArgs = chromeLaunchArgs(profileDir)
 
   const chromePaths = [
     // Windows

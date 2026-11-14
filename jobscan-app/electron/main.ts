@@ -2,7 +2,6 @@ import { app, BrowserWindow, dialog } from 'electron'
 // First: it may move userData, and the store is created when imported below.
 import './user-data-dir'
 import path from 'path'
-import os from 'os'
 import fs from 'fs'
 import { spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
@@ -19,6 +18,7 @@ import { ensureProfiles, syncActiveSnapshot } from './profiles'
 import store from './state-store'
 import { createQuitGuard } from './quit-guard'
 import { resolvePython } from './app-paths'
+import { codexHome } from './codex-home'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -39,7 +39,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // minutes for. Discard the WAL+SHM directly in that case — same approach as
 // the manual cleanup that fixed the original bloat.
 function truncateCodexWal(): void {
-  const dbDir = path.join(os.homedir(), '.codex')
+  // Tests never touch a Codex log folder, not even a scratch one.
+  if (process.env['E2E_TEST'] === '1') return
+  const dbDir = codexHome()
   const dbPath = path.join(dbDir, 'logs_2.sqlite')
   const walPath = path.join(dbDir, 'logs_2.sqlite-wal')
   const shmPath = path.join(dbDir, 'logs_2.sqlite-shm')
