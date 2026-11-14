@@ -17,7 +17,7 @@ function rows() {
       const jobId = `job-${String(n).padStart(3, '0')}`
       const remote = n % 2 === 0
       out.push({
-        id: `${platform}:${slug}:${jobId}`, platform, slug, company: `Fixture Company ${c}`, jobId,
+        id: `${platform === 'lever' ? 'lv' : 'ab'}:${slug}:${jobId}`, platform, slug, company: `Fixture Company ${c}`, jobId,
         title: `${['Backend', 'Platform', 'Data'][j]} Engineer ${n}`,
         location: remote ? 'Remote - United States' : 'New York, NY',
         workplace: remote ? 'remote' : 'onsite',

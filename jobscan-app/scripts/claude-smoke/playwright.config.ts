@@ -5,7 +5,7 @@ import { defineConfig } from '@playwright/test'
 // isolates and what it never touches.
 export default defineConfig({
   testDir: '.',
-  testMatch: 'smoke.spec.ts',
+  testMatch: ['smoke.spec.ts', 'orchestrator.spec.ts'],
   workers: 1,
   retries: 0,
   timeout: 45 * 60_000,
