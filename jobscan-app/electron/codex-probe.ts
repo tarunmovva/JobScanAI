@@ -115,8 +115,14 @@ function probeOnce(spec: ProbeSpec, opts: ProbeOptions): Promise<Outcome> {
     const timer = setTimeout(() => inconclusive(`timed out waiting for ${waitingFor}`), opts.timeoutMs)
 
     const pending = new Map<number, { resolve: (r: unknown) => void; reject: (e: unknown) => void }>()
+    // The streamed text and the completion are kept by turn id, not matched
+    // against the turn being waited for: they can arrive in the same chunk as
+    // the turn/start reply, and readline hands over every line of a chunk
+    // before `await call('turn/start')` resumes and learns that id. Matching
+    // then dropped both, and the check waited out its whole timeout.
+    const replies = new Map<string, string>()
+    const completions = new Map<string, { status: string; error: string }>()
     let turnId = ''
-    let replyText = ''
     let turnDone: ((status: string, error: string) => void) | null = null
     let nextId = 1
 
@@ -131,15 +137,17 @@ function probeOnce(spec: ProbeSpec, opts: ProbeOptions): Promise<Outcome> {
         return
       }
       const params = (msg['params'] ?? {}) as Record<string, unknown>
-      if (msg['method'] === 'item/agentMessage/delta' && params['turnId'] === turnId) {
-        replyText += String(params['delta'] ?? '')
+      if (msg['method'] === 'item/agentMessage/delta') {
+        const id = String(params['turnId'] ?? '')
+        replies.set(id, (replies.get(id) ?? '') + String(params['delta'] ?? ''))
       }
       if (msg['method'] === 'turn/completed') {
         const t = params['turn'] as Record<string, unknown> | undefined
-        if (t?.['id'] === turnId && turnDone) {
-          const e = t['error'] as Record<string, unknown> | undefined
-          turnDone(String(t['status'] ?? ''), String(e?.['message'] ?? ''))
-        }
+        const id = String(t?.['id'] ?? '')
+        const e = t?.['error'] as Record<string, unknown> | undefined
+        const done = { status: String(t?.['status'] ?? ''), error: String(e?.['message'] ?? '') }
+        completions.set(id, done)
+        if (turnId && id === turnId) turnDone?.(done.status, done.error)
       }
     })
     child.stderr?.resume()
@@ -198,9 +206,6 @@ function probeOnce(spec: ProbeSpec, opts: ProbeOptions): Promise<Outcome> {
       } catch (e) { return failed('thread/start', e) }
       if (!threadId) return protocol('thread/start: Codex did not return thread id')
 
-      const completed = new Promise<{ status: string; error: string }>(res => {
-        turnDone = (status, error) => res({ status, error })
-      })
       try {
         const r = await call('turn/start', turnStartParams({ threadId, text: PROBE_TEXT, model })) as { turn?: { id?: string } }
         turnId = String(r?.turn?.id ?? '')
@@ -208,9 +213,13 @@ function probeOnce(spec: ProbeSpec, opts: ProbeOptions): Promise<Outcome> {
       if (!turnId) return protocol('turn/start: Codex did not return turn id')
 
       waitingFor = 'turn/completed'
-      const done = await completed
+      // No await between learning the id and taking a completion that already
+      // came, or registering for one: no line can slip in between.
+      const done = completions.get(turnId) ?? await new Promise<{ status: string; error: string }>(res => {
+        turnDone = (status, error) => res({ status, error })
+      })
       if (done.status === 'failed') return inconclusive(`the turn failed: ${done.error.slice(0, 200)}`)
-      if (!replyText.trim()) return inconclusive('the turn completed with an empty reply')
+      if (!(replies.get(turnId) ?? '').trim()) return inconclusive('the turn completed with an empty reply')
       finish({ kind: 'ok' }, false, true)
     })().catch(e => inconclusive(String(e).slice(0, 200)))
   })
