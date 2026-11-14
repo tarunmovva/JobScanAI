@@ -10,11 +10,12 @@ import {
   cliSubmit, getDbPath, cliDbQuery, automatorPython,
 } from './cli-runner'
 import {
-  runCodexThread, parseJsonResponse, clearCodexClient,
+  parseJsonResponse,
   QUERY_GEN_SYSTEM, QUERY_GEN_DONE_ACK, QUERY_GEN_PROMPT_REV,
   RATING_SYSTEM, RATING_PROMPT_REV, RATING_DESCRIPTION_CHARS, payloadSystem, PAYLOAD_PROMPT_REV,
 } from './codex-client'
 import { buildAndWritePayload } from './payload-builder'
+import { aiEngine } from './ai-engine'
 import {
   wasInterrupted, abandonSql, landingState, RUN_STATE_KEYS,
 } from './interrupted-run'
@@ -74,10 +75,10 @@ export async function cancelActivePipeline(reason = 'user-back-nav'): Promise<vo
   t.reason = reason
   for (const c of t.children) { killTree(c) }
   push('pipeline:canceled', { reason })
-  // Await codex shutdown so the next runCodexThread cannot race a still-alive
-  // codex.exe holding the SQLite WAL — otherwise we hit SQLITE_BUSY and the
-  // "Codex RPC timeout: initialize" bug returns under fast back→forward.
-  try { await clearCodexClient() } catch { /* best effort */ }
+  // Await the engine's shutdown so the next AI call cannot race it. For
+  // Codex: a still-alive codex.exe holding the SQLite WAL hits SQLITE_BUSY
+  // and the "Codex RPC timeout: initialize" bug returns under fast back→forward.
+  await aiEngine().cancelAll(reason)
 }
 
 async function withToken<T>(fn: (t: CancelToken) => Promise<T>): Promise<T | void> {
@@ -264,7 +265,8 @@ function getProfileForHash(): string {
 // re-runs on the new model instead of replaying old-model results.
 // (search/extract are CLI-only — no model in their hashes.)
 function codexModelForHash(): string {
-  return String(store.get('codexModel') ?? '')
+  // Codex: the raw codexModel setting, exactly as before (ai-engine.ts).
+  return aiEngine().hashModel()
 }
 
 export function queryGenHash(): string {
@@ -505,9 +507,12 @@ async function generateAndSearch(
     let streaming = ''
     let raw = ''
     try {
-      raw = await runCodexThread(QUERY_GEN_SYSTEM, userMsg, (tok) => {
-        streaming += tok
-        push('queryGen:streaming', { index: idx, text: streaming })
+      raw = await aiEngine().complete({
+        kind: 'query_gen', system: QUERY_GEN_SYSTEM, user: userMsg, owner: t,
+        onToken: (tok) => {
+          streaming += tok
+          push('queryGen:streaming', { index: idx, text: streaming })
+        },
       })
     } catch (e) {
       if (t.canceled) throw new Error('__canceled__')
@@ -962,8 +967,10 @@ export function ratingEngineCancel(): void {
   e.canceled = true
   e.queue.length = 0
   e.active = false
-  // In-flight codex turns die via clearCodexClient in cancelActivePipeline;
-  // their rejections are swallowed per-batch. Nothing is persisted.
+  // canceled is set first, so a batch that settles now saves nothing. Then
+  // the engine ends this owner's calls (Codex: a no-op; its turns die via
+  // cancelAll in cancelActivePipeline). Rejections are swallowed per-batch.
+  try { aiEngine().cancelOwner(e) } catch { /* no engine registered */ }
   for (const r of e.settledResolvers.splice(0)) r()
 }
 
@@ -1009,7 +1016,7 @@ async function ratingEngineBatch(e: RatingEngine, batch: Job[]): Promise<void> {
       description: (j.description ?? '').slice(0, RATING_DESCRIPTION_CHARS),
     }))
     const userMsg = `${e.profileBlock}RESUME:\n${e.resumeText}\n\nJOBS:\n${JSON.stringify(jobSummaries, null, 2)}`
-    const raw = await runCodexThread(RATING_SYSTEM, userMsg)
+    const raw = await aiEngine().complete({ kind: 'rating', system: RATING_SYSTEM, user: userMsg, owner: e })
     if (e.canceled) return
     const ratings = parseJsonResponse<Array<{ job_id: string; platform: string; rating: number; reason: string }>>(raw) ?? []
 
@@ -1862,7 +1869,7 @@ async function runPayloadGenInner(t: CancelToken): Promise<void> {
         type PayloadReply = { answers: Record<string, string | string[]>; cover_letter?: string }
         const askPayload = async (): Promise<PayloadReply | null> =>
           parseJsonResponse<PayloadReply>(
-            await runCodexThread(payloadSystem(wantsCoverLetter), userMsg))
+            await aiEngine().complete({ kind: 'payload', system: payloadSystem(wantsCoverLetter), user: userMsg, owner: t }))
 
         let parsed = await askPayload()
         // A turn that yields NO answers has failed, not answered. One live run

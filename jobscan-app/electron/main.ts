@@ -19,8 +19,14 @@ import store from './state-store'
 import { createQuitGuard } from './quit-guard'
 import { resolvePython } from './app-paths'
 import { codexHome } from './codex-home'
+import { registerEngines } from './ai-engine'
+import { createCodexEngine } from './ai-engine-codex'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// The AI engines, registered before anything can make an AI call. The
+// machine-wide `aiEngine` setting picks one; Codex is the default.
+registerEngines({ codex: createCodexEngine() }, () => store.get('aiEngine'))
 
 // ── Codex logs DB maintenance ────────────────────────────────────────────────
 //

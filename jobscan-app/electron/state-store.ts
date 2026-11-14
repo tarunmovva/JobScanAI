@@ -16,6 +16,7 @@ interface StoreSchema {
   resumePath?: string
   ratingAgents: number
   payloadAgents: number
+  aiEngine?: string             // 'codex' (default) | 'claude' — which engine answers the AI calls (ai-engine.ts)
   codexModel: string            // '' = Auto — codex default / first-listed model
   codexAutoUpdate: boolean      // keep the Codex CLI current (default true)
   codexManagedVersion: string   // last version health-checked into userData
