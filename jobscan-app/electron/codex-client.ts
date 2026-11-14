@@ -12,6 +12,7 @@ import { CORE_METHODS, isProtocolError, createStartupCrashCounter } from './code
 import { warmBinary } from './binary-warmup'
 import { RATE_LIMITS_READ, mapRateLimits, loginStatusFrom } from './codex-account'
 import { codexHome, e2eCodexCommand } from './codex-home'
+import { EarlyTurnEvents } from './turn-buffer'
 import type { CodexModelOption, RateLimitSnapshot } from '../src/types'
 
 // File-probe codex auth so boot routing doesn't spawn a codex.exe just to
@@ -212,6 +213,7 @@ class CodexAppServerClient {
   private nextId = 1
   private pendingRequests: Map<number, PendingRequest> = new Map()
   private pendingTurns: Map<string, PendingTurn> = new Map()
+  private earlyTurnEvents = new EarlyTurnEvents()
   private closed = true
   /** The binary this client started: what a protocol failure rolls back. */
   private command = ''
@@ -299,9 +301,12 @@ class CodexAppServerClient {
 
   private handleNotification(method: string, params: Record<string, unknown>): void {
     if (method === 'item/agentMessage/delta') {
-      const turn = this.pendingTurns.get(params['turnId'] as string)
-      if (!turn) return
+      const turnId = String(params['turnId'] ?? '')
       const delta = String(params['delta'] ?? '')
+      const turn = this.pendingTurns.get(turnId)
+      // Not registered yet: it may have come in the same chunk as the
+      // turn/start reply. runTurn claims it as soon as it learns the id.
+      if (!turn) { if (turnId) this.earlyTurnEvents.delta(turnId, delta); return }
       turn.text += delta
       turn.onToken?.(delta)
     }
@@ -311,22 +316,30 @@ class CodexAppServerClient {
       const turnObj = params['turn'] as Record<string, unknown> | undefined
       const turnId = turnObj?.['id'] as string | undefined
       if (!turnId) return
+      const status = String(turnObj?.['status'] ?? '')
+      const errObj = turnObj?.['error'] as Record<string, unknown> | undefined
       const turn = this.pendingTurns.get(turnId)
-      if (!turn) return
+      if (!turn) { this.earlyTurnEvents.completed(turnId, { status, error: errObj }); return }
       clearTimeout(turn.timeout)
       this.pendingTurns.delete(turnId)
-      const status = String(turnObj?.['status'] ?? '')
-      if (status === 'failed') {
-        // Capture actual error from params.turn.error (same as testapp does)
-        const errObj = turnObj?.['error'] as Record<string, unknown> | undefined
-        const errMsg = String(errObj?.['message'] ?? 'Codex turn failed with no message')
-        const errCode = errObj?.['code'] ?? ''
-        console.error('[codex] turn failed:', errMsg, errCode ? `(code: ${errCode})` : '')
-        turn.reject(new Error(`Codex: ${errMsg}`))
-      } else {
-        // 'completed', 'interrupted', or any other status → resolve with text accumulated
-        turn.resolve(turn.text)
-      }
+      this.settleTurn(turn, status, errObj)
+    }
+  }
+
+  private settleTurn(
+    turn: Pick<PendingTurn, 'text' | 'resolve' | 'reject'>,
+    status: string,
+    errObj: Record<string, unknown> | undefined,
+  ): void {
+    if (status === 'failed') {
+      // Capture actual error from params.turn.error (same as testapp does)
+      const errMsg = String(errObj?.['message'] ?? 'Codex turn failed with no message')
+      const errCode = errObj?.['code'] ?? ''
+      console.error('[codex] turn failed:', errMsg, errCode ? `(code: ${errCode})` : '')
+      turn.reject(new Error(`Codex: ${errMsg}`))
+    } else {
+      // 'completed', 'interrupted', or any other status → resolve with text accumulated
+      turn.resolve(turn.text)
     }
   }
 
@@ -480,13 +493,21 @@ class CodexAppServerClient {
       throw new Error('Codex did not return turn id')
     }
 
+    // Claim anything that arrived before this point, then register -- with
+    // no await in between, so no line can slip through the gap.
+    const early = this.earlyTurnEvents.take(turnId)
     return new Promise<string>((resolve, reject) => {
+      if (early.text) onToken?.(early.text)
+      if (early.completion) {
+        this.settleTurn({ text: early.text, resolve, reject }, early.completion.status, early.completion.error)
+        return
+      }
       const timeout = setTimeout(() => {
         this.pendingTurns.delete(turnId)
         reject(new Error('Codex turn timed out after 3 minutes'))
       }, TURN_TIMEOUT_MS)
 
-      this.pendingTurns.set(turnId, { text: '', resolve, reject, onToken, timeout })
+      this.pendingTurns.set(turnId, { text: early.text, resolve, reject, onToken, timeout })
     })
   }
 
