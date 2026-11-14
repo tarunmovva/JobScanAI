@@ -22,6 +22,7 @@ if (process.argv[2] === 'login' && process.argv[3] === 'status') {
 if (mode === 'crash') process.exit(3)
 
 const send = o => process.stdout.write(JSON.stringify(o) + '\n')
+let turns = 0
 const notify = (method, params) => send({ jsonrpc: '2.0', method, params })
 const unknownMethod = m => `Invalid request: unknown variant \`${m}\`, expected one of \`initialize\`, \`model/list\``
 
@@ -64,6 +65,17 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
           { jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { turnId: 'tu-1', delta: 'OK' } },
           { jsonrpc: '2.0', method: 'turn/completed', params: { turn: { id: 'tu-1', status: 'completed' } } },
         ].map(o => JSON.stringify(o) + '\n').join(''))
+      }
+      if (mode === 'oracle') {
+        // The end-to-end tests' shared answers (tests/fixtures/ai-oracle.cjs),
+        // one turn id per turn so parallel turns stay apart.
+        const id = `tu-${++turns}`
+        const text = String(m.params?.input?.[0]?.text ?? '')
+        if (process.env.FAKE_PROMPT_LOG) fs.appendFileSync(process.env.FAKE_PROMPT_LOG, JSON.stringify({ text }) + '\n')
+        const reply = require(process.env.FAKE_ORACLE).answer(text)
+        ok({ turn: { id } })
+        notify('item/agentMessage/delta', { turnId: id, delta: reply })
+        return notify('turn/completed', { turn: { id, status: 'completed' } })
       }
       ok({ turn: { id: 'tu-1' } })
       if (mode === 'no-complete') return
