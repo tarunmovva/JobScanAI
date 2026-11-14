@@ -48,6 +48,12 @@ export function createClaudeEngineForApp(): AiEngine {
     binary: claudeBinary,
     model: () => String(store.get('claudeModel') ?? ''),
     workDir,
-    onCall: info => { for (const fn of listeners) { try { fn(info) } catch { /* a listener never breaks a call */ } } },
+    onCall: info => {
+      // One line per call: what ran, how it ended, how long, how many tokens. Never any text.
+      const u = info.usage
+      console.log(`[claude] ${info.kind} ${info.outcome} ${info.ms}ms`
+        + (u ? ` in=${u.input} cache_write=${u.cacheWrite} cache_read=${u.cacheRead} out=${u.output}` : ''))
+      for (const fn of listeners) { try { fn(info) } catch { /* a listener never breaks a call */ } }
+    },
   })
 }
