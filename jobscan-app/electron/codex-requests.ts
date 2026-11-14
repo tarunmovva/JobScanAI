@@ -1,11 +1,9 @@
 /**
- * The thread/start and turn/start requests, built in one place: real runs
- * (codex-client.ts runTurn) and the update check (codex-probe.ts) send
- * exactly the same thing, so a Codex that would reject the app's real
- * requests fails the check rather than every job afterwards.
+ * The thread/start and turn/start requests the Codex engine sends
+ * (codex-client.ts runTurn), built in one place.
  */
 
-/** What the update check asks: one word, the cheapest real turn there is. */
+/** The cheapest real turn there is: one word. For checking a Codex by hand. */
 export const PROBE_TEXT = 'Reply with the single word OK and nothing else.'
 
 /** A fresh ephemeral, read-only thread per turn: each task's context stays its own. */

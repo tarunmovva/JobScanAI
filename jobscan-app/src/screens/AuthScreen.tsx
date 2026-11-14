@@ -6,13 +6,14 @@ import Spark from '../components/Spark'
 type Status = 'checking' | 'idle' | 'waiting' | 'error'
 type Engine = 'codex' | 'claude'
 
-interface AuthStatus { loggedIn: boolean; engine?: Engine; claudeFound?: boolean }
+interface AuthStatus { loggedIn: boolean; engine?: Engine; claudeFound?: boolean; codexFound?: boolean }
 
 export default function AuthScreen() {
   const [status, setStatus] = useState<Status>('checking')
   const [error, setError] = useState('')
   const [engine, setEngine] = useState<Engine>('codex')
   const [claudeFound, setClaudeFound] = useState(true)
+  const [codexFound, setCodexFound] = useState(true)
 
   // auth:status auto-advances to Resume when the engine is signed in.
   const check = (): void => {
@@ -20,6 +21,7 @@ export default function AuthScreen() {
     ipc.invoke<AuthStatus>('auth:status').then(r => {
       setEngine(r?.engine === 'claude' ? 'claude' : 'codex')
       setClaudeFound(r?.claudeFound !== false)
+      setCodexFound(r?.codexFound !== false)
       if (!r?.loggedIn) setStatus('idle')
       // If logged in: auth:status handler calls setState('resume') → App.tsx transitions
     }).catch(() => setStatus('idle'))
@@ -72,7 +74,22 @@ export default function AuthScreen() {
         </div>
       )}
 
-      {engine === 'codex' && status === 'idle' && (
+      {engine === 'codex' && status === 'idle' && !codexFound && (
+        <div className="flex flex-col items-center gap-3 text-center max-w-md">
+          <p className="text-gray-300 text-sm">The Codex CLI was not found on this computer.</p>
+          <p className="text-gray-500 text-sm">
+            Install it with <code className="text-orange-300">npm install -g @openai/codex</code>, then check again.
+          </p>
+          <button
+            onClick={check}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-full font-medium transition-all"
+          >
+            Check again
+          </button>
+        </div>
+      )}
+
+      {engine === 'codex' && status === 'idle' && codexFound && (
         <button
           onClick={login}
           className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-full font-medium transition-all"

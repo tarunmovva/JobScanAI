@@ -100,6 +100,8 @@ export interface Settings {
   claudeModel?: string         // '' = Claude Code's default
   claudePath?: string          // optional path to Claude Code when it is not found on its own
   claudeFound?: boolean        // read-only: Claude Code was found on this machine
+  codexPath?: string           // optional path to the Codex CLI when it is not found on its own
+  codexFound?: boolean         // read-only: the Codex CLI was found on this machine
   jobscanExePath: string
   pythonDir: string
   jobAutomatorHome: string
@@ -111,18 +113,6 @@ export interface Settings {
 export interface CodexModelOption {
   id: string
   label: string
-}
-
-// Which models the picker can offer is decided by the Codex CLI, so the app
-// keeps it current and reports what it is running.
-export interface CodexUpdateStatus {
-  managedVersion: string | null
-  managedPath: string | null
-  bundledPath: string | null
-  latestVersion: string | null
-  checkedAt: string
-  state: 'idle' | 'checking' | 'downloading' | 'verifying' | 'health-checking' | 'up-to-date' | 'updated' | 'failed' | 'skipped'
-  message: string
 }
 
 // A local profile (persona): its own resume + application strategy.

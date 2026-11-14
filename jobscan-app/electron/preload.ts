@@ -9,7 +9,6 @@ const ALLOWED_INVOKE = new Set([
   'selection:confirm',
   'settings:get', 'settings:save', 'codex:list-models', 'engine:set',
   'harness:set', 'harness:get-status',
-  'codex:update-status', 'codex:check-update',
   'chrome:focus-tab',
   'imap:get-config', 'imap:save-config', 'imap:test-connection',
   'state:get', 'state:get-counts',

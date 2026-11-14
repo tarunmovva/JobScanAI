@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { AlertTriangle, Check } from 'lucide-react'
 import { ipc } from '../ipc'
 import { profileDotColor } from '../profileColor'
-import type { Settings, CodexModelOption, CodexUpdateStatus, ProfileInfo } from '../types'
+import type { Settings, CodexModelOption, ProfileInfo } from '../types'
 import AppliedJobsPanel from './AppliedJobsPanel'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -21,8 +21,6 @@ export default function SettingsPanel({ onClose }: Props) {
   const [imapInfo, setImapInfo] = useState<{ configured: boolean; host?: string; username?: string }>({ configured: false })
   const [models, setModels] = useState<CodexModelOption[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
-  const [codexUpdate, setCodexUpdate] = useState<CodexUpdateStatus | null>(null)
-  const [checkingCodex, setCheckingCodex] = useState(false)
   const [engineMsg, setEngineMsg] = useState('')
   const [harness, setHarness] = useState<{ enabled: boolean; connected: boolean }>({ enabled: false, connected: false })
   const [harnessMsg, setHarnessMsg] = useState('')
@@ -84,9 +82,6 @@ export default function SettingsPanel({ onClose }: Props) {
   const aliveRef = useRef(true)
   const loadCodexInfo = (): void => {
     const alive = (): boolean => aliveRef.current
-    ipc.invoke<CodexUpdateStatus>('codex:update-status')
-      .then(r => { if (alive()) setCodexUpdate(r ?? null) })
-      .catch(() => { /* version line just stays hidden */ })
     ipc.invoke<{ models: CodexModelOption[]; error: string | null; clearedModel?: string }>('codex:list-models')
       .then(r => {
         if (!alive()) return
@@ -317,37 +312,15 @@ export default function SettingsPanel({ onClose }: Props) {
                 Model list unavailable — is Codex signed in? Auto and your saved choice still work.
               </p>
             )}
-            {/* Which models appear above is decided by the Codex CLI, not by
-                this app — an out-of-date CLI cannot decode the current model
-                list and silently falls back to its own built-in one. */}
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-gray-500">
-                Codex CLI {codexUpdate?.managedVersion ?? 'bundled'}
-                {codexUpdate?.latestVersion && codexUpdate.latestVersion !== codexUpdate.managedVersion
-                  ? ` — ${codexUpdate.latestVersion} available`
-                  : ''}
-              </span>
-              <button
-                type="button"
-                disabled={checkingCodex}
-                onClick={async () => {
-                  setCheckingCodex(true)
-                  try {
-                    const r = await ipc.invoke<CodexUpdateStatus>('codex:check-update')
-                    setCodexUpdate(r ?? null)
-                    const list = await ipc.invoke<{ models: CodexModelOption[] }>('codex:list-models')
-                    setModels(list?.models ?? [])
-                  } finally { setCheckingCodex(false) }
-                }}
-                className="text-xs text-orange-400 hover:text-orange-300 disabled:text-gray-600 disabled:cursor-default"
-              >
-                {checkingCodex ? 'Updating…' : 'Check for update'}
-              </button>
-            </div>
-            {codexUpdate && ['failed', 'downloading', 'health-checking', 'verifying', 'updated'].includes(codexUpdate.state) && (
-              <p className={`text-xs ${codexUpdate.state === 'failed' ? 'text-amber-400' : 'text-gray-500'}`}>
-                {codexUpdate.message}
+            {/* Which models appear above is decided by your Codex CLI: an
+                out-of-date one cannot decode the current model list. */}
+            {s.codexFound === false ? (
+              <p className="text-xs text-amber-400">
+                Codex CLI was not found. Install it with npm install -g @openai/codex (then sign in from the
+                login screen), set its path under Paths, or switch to your Claude Code above.
               </p>
+            ) : (
+              <p className="text-xs text-gray-500">Uses your own Codex CLI. Keep it current with npm install -g @openai/codex.</p>
             )}
           </div>
           )}
@@ -415,6 +388,7 @@ export default function SettingsPanel({ onClose }: Props) {
           {field('pythonDir', 'Python package dir (JOB_AUTOMATOR_PYTHON_DIR)')}
           {field('jobAutomatorHome', 'Job automator home (JOB_AUTOMATOR_HOME)')}
           {engine === 'claude' && field('claudePath', 'Claude Code path (optional)', 'text', 'Found automatically when empty')}
+          {engine !== 'claude' && field('codexPath', 'Codex CLI path (optional)', 'text', 'Found automatically when empty')}
         </div>
 
         <div className="flex gap-2 justify-between mt-2 pt-2 border-t border-white/[0.06]">

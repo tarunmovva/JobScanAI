@@ -39,13 +39,13 @@ No API key and no per-token bill. Search runs on your machine and costs no AI ti
 
 ## Why it's different
 
-- **🔑 Runs on your ChatGPT plan.** The app drives the official Codex CLI, signed in with your ChatGPT account. There's no API key to paste and no metered bill. Usage counts against the Codex allowance you already have.
+- **🔑 Runs on the AI plan you already have.** Pick the engine in Settings: **ChatGPT (Codex)**, through your own Codex CLI signed in with your ChatGPT account, or **your own Claude Code**, signed in with your Claude plan. Either way there's no API key to paste and no metered bill, and nothing AI-related is bundled with the app.
 - **🗄️ Search costs no AI time.** Job boards are downloaded once into a local SQLite full-text index. The AI writes the searches, and the searches themselves run locally.
 - **💸 Built to spend as little AI as possible.** Each run caps how many jobs it rates and remembers what it already scored. Forms are filled by ordinary code first, and the AI is called only to fix what that code could not. [Here's every cost decision](#-built-to-save-cost).
 - **🛡️ Honest about what it can't do.** A CAPTCHA, or an email code that never arrives, doesn't count as a failure. The app marks the job **Needs you** and leaves the tab open, one click from done.
 - **📬 Reads email codes for you.** Greenhouse emails a security code after you submit. JobScan reads it from your mailbox over IMAP and types it in, even with several applications running at once.
 - **🔁 Runs unattended if you want.** Loop mode has a daily limit, a minimum time between rounds, and a score threshold. It pauses a job board that keeps showing CAPTCHAs, waits out Codex usage limits, and never re-applies to a job whose submission might already have gone in.
-- **🔒 Stored locally, sent only where it has to go.** Your resume, profile, history and mailbox settings live on your machine and are ignored by git. Two things leave it. Your resume, profile and the job postings go to Codex under your ChatGPT account, so it can write queries, ratings and answers. Your answers and files go to the employers you apply to.
+- **🔒 Stored locally, sent only where it has to go.** Your resume, profile, history and mailbox settings live on your machine and are ignored by git. Two things leave it. Your resume, profile and the job postings go to the AI engine you chose (Codex under your ChatGPT account, or Claude Code under your Claude plan), so it can write queries, ratings and answers. Your answers and files go to the employers you apply to.
 
 ---
 
@@ -57,7 +57,7 @@ No API key and no per-token bill. Search runs on your machine and costs no AI ti
   - [1. Sign in](#1-sign-in) · [2. Resume & Profile](#2-resume--profile) · [3. Email for one-time codes](#3-email-for-one-time-codes-otp)
   - [4. Rebuild the job database](#4-rebuild-the-job-database) · [5. Find Jobs](#5-find-jobs-how-searches-are-written-and-run) · [6. Rating](#6-rating-how-every-job-is-scored)
   - [7. Applications](#7-applications-how-a-form-gets-filled-and-submitted) · [8. One-time codes, end to end](#8-one-time-codes-end-to-end) · [9. The repair agent](#9-the-repair-agent)
-  - [10. Done & history](#10-done-history-and-application-records) · [11. Settings](#11-settings) · [12. Loop mode](#12-loop-mode)
+  - [10. Done & history](#10-done-history-and-application-records) · [11. Settings](#11-settings) · [12. Loop mode](#12-loop-mode) · [13. Let Claude Code drive JobScan](#13-let-claude-code-drive-jobscan)
 - [Built to save cost](#-built-to-save-cost)
 - [Built not to lose work](#-built-not-to-lose-work)
 - [The `jobscan` CLI](#the-jobscan-cli)
@@ -74,7 +74,10 @@ No API key and no per-token bill. Search runs on your machine and costs no AI ti
 - **Go 1.24+**: <https://go.dev/dl/> (macOS: `brew install go`). The `jobscan` CLI is built from source on your machine.
 - **Python 3.10+**: <https://www.python.org/downloads/> (macOS: `brew install python`). It runs the form filler.
 - **Google Chrome**: the filler drives your own Chrome. Set `JOB_AUTOMATOR_CHROME_PATH` if Chrome is not in the usual place.
-- A **ChatGPT account with Codex access**. You sign in from inside the app. Ratings and answers use your account's Codex usage.
+- **An AI engine, either one:**
+  - **Codex CLI** with a ChatGPT account that has Codex access: `npm install -g @openai/codex`. You sign in from inside the app.
+  - **Claude Code**, installed and signed in once (`claude`, then `/login`). Choose it on the sign-in screen or in Settings.
+  Searches, ratings and answers use that account's usage.
 
 ### Run it
 
@@ -95,7 +98,7 @@ Each step is skipped when it is already up to date, so later starts are quick. R
 
 ### First run
 
-1. **Sign in to Codex** when the app asks.
+1. **Pick your AI and sign in** when the app asks: Codex (sign in with ChatGPT) or your own Claude Code.
 2. **Add your resume and profile.** That means target locations, work authorization, and the answers application forms ask for. The target location decides which markets the searches cover.
 3. **Find jobs.** The first database build downloads postings from about 13,700 public job boards into `jobscan/jobs.db`. It takes a while, and the database grows to a few GB.
 4. **Rate, pick and apply.** The app opens Chrome with its own profile (remote debugging on port 9222) and fills each form. Applications that need a CAPTCHA solved or other human input are left for you.
@@ -143,7 +146,7 @@ flowchart LR
     end
 
     DB[("jobs.db<br/>SQLite + FTS5")]
-    Codex["Codex app-server<br/>your ChatGPT account"]
+    Codex["AI engine<br/>your Codex CLI or your Claude Code"]
     Chrome["Your Chrome<br/>CDP :9222"]
     Mail["Your mailbox<br/>IMAP"]
     Boards["Greenhouse · Lever · Ashby<br/>public job-board APIs"]
@@ -167,15 +170,15 @@ flowchart LR
 | **Desktop app** (`jobscan-app/`) | TypeScript, Electron, React, Tailwind | One codebase for Windows and macOS. A real window, not a terminal, because applying is something you watch: a board, open tabs, a "needs you" queue. |
 | **`jobscan` CLI** (`jobscan/cmd`, `jobscan/internal`) | Go | Downloading about 13,700 boards is a concurrency problem: hundreds of requests in flight, written into SQLite as they arrive. Go does that in one static binary, and the CLI works without the app. |
 | **Form filler** (`jobscan/job_application_automator`) | Python + Playwright over Chrome DevTools | Filling a form is browser automation. Playwright's Python API, attached to *your* Chrome over CDP, drives the three applicant-tracking systems with platform-specific code. |
-| **AI** | Codex CLI (`@openai/codex`) | `codex app-server` speaks JSON-RPC and signs in with ChatGPT. The app holds one long-lived Codex process and opens a fresh, read-only, ephemeral thread for every task. |
+| **AI** | Your Codex CLI, or your Claude Code | Behind one interface (`electron/ai-engine.ts`). Codex: `codex app-server` over JSON-RPC, one long-lived process, a fresh read-only ephemeral thread per task. Claude Code: one isolated, tool-less `claude -p` run per task. Neither is bundled. |
 
 <details>
 <summary><b>Why the app drives the Codex CLI instead of calling an API directly</b></summary>
 
 - **No key and no meter.** Signing in with ChatGPT means the work counts against a plan you already pay for, with nothing extra to set up or bill.
 - **One process, many threads.** `codex-client.ts` starts `codex app-server` once and keeps it running. Each query, rating batch or set of answers gets its own `thread/start` with `ephemeral: true`, `sandbox: "read-only"` and `approvalPolicy: "never"`, so no task ever sees another task's context. Turns run at `effort: "medium"` with `summary: "none"`, which skips paying for reasoning summaries nobody reads.
-- **Kept up to date and checked.** The Codex version bundled at build time goes stale. `codex-updater.ts` fetches the latest release from npm, checks it against the registry's sha512, and tests it on *both* ways the app uses it before switching over: app-server JSON-RPC (for ratings and answers) and `codex exec` (for the repair agent). A version that passes only one test is never used.
-- **No console flash on Windows.** The app runs the native `codex.exe` directly rather than through the `codex.js` wrapper, so its `windowsHide` setting takes effect. It also runs a new binary once in a worker thread first (`binary-warmup.ts`): an antivirus scan of a freshly downloaded `codex.exe` froze the window for 11 seconds before this fix.
+- **Your own Codex, found where npm put it.** Nothing is bundled: `codex-locate.ts` finds the native binary inside your global `@openai/codex` install (nested or flat npm layout) the way `codex.js` does, or uses the path you set in Settings. Keep it current with `npm install -g @openai/codex`.
+- **No console flash on Windows.** The app runs the native `codex.exe` directly rather than through the `codex.js` wrapper or the `.cmd` shim, so its `windowsHide` setting takes effect. It also runs a new binary once in a worker thread first (`binary-warmup.ts`): an antivirus scan of a never-seen `codex.exe` froze the window for 11 seconds before this fix.
 
 </details>
 
@@ -209,7 +212,11 @@ Every stage stores a hash of its inputs. If you go **Back** and **forward** with
 
 <img src="docs/screenshots/01-sign-in.png" alt="Sign-in screen with a 'Login with ChatGPT' button" width="100%">
 
-Click **Login with ChatGPT**. The app runs `codex login`, which opens the ChatGPT sign-in page in your browser. When you come back, the app checks for `~/.codex/auth.json` and moves on to your profile. Signing in again later is only needed if Codex signs you out.
+With **ChatGPT (Codex)**, click **Login with ChatGPT**. The app runs your Codex CLI's `codex login`, which opens the ChatGPT sign-in page in your browser. When you come back, the app checks for `~/.codex/auth.json` and moves on to your profile. If the Codex CLI isn't installed, the screen says how to install it (`npm install -g @openai/codex`).
+
+With **your Claude Code**, there is nothing to sign in to here: JobScan uses the Claude Code already signed in on this computer. If it isn't signed in, the screen tells you to run `claude` in a terminal and type `/login`, then **Check again**. Each screen links to the other engine.
+
+**How Claude Code answers.** Every AI call (one search, one batch of 20 ratings, one form's answers) runs your Claude Code once, headless, with the same prompt Codex gets. That run has no tools, no MCP servers, none of your settings, hooks, plugins or memory, no `@file` expansion and no saved transcript, in an empty private folder: it can only read the prompt and write a reply, which goes back to JobScan alone. Form repair (section 9) is off with this engine.
 
 ### 2. Resume & Profile
 
@@ -499,7 +506,7 @@ Lever and Ashby don't send codes through this path. If their forms show a CAPTCH
 
 ### 9. The repair agent
 
-Most forms are filled entirely by ordinary code. When a fill ends in a **recoverable** failure (a validation error, a conditional question that appeared after an answer, an unconfirmed submit), the filler hands that tab to a **repair agent**: `codex exec` attached to the same Chrome through Playwright MCP.
+Most forms are filled entirely by ordinary code. When a fill ends in a **recoverable** failure (a validation error, a conditional question that appeared after an answer, an unconfirmed submit), the filler hands that tab to a **repair agent**: `codex exec` attached to the same Chrome through Playwright MCP. The repair agent runs only with the Codex engine; with Claude Code as the engine it is off, and a job that needs repair lands in Defects for you to finish.
 
 - **It starts with a focus dossier.** The filler knows exactly which controls failed, with the expected value, what the control actually held, the page's own error message, and the options in the live menu. The agent is told **not** to take a full-page snapshot (4,000–10,000 tokens) when a targeted fix costs about 200.
 - **It has purpose-built form tools.** `form_tools_mcp.py` provides three tools:
@@ -531,14 +538,16 @@ The Done screen sorts the run into **Submitted**, **Needs you** (with **Finish i
 | Setting | What it does |
 |---|---|
 | **Profiles** | Create, rename, delete and switch personas. *A new profile starts empty: upload a resume and set preferences after switching.* Shared between profiles: the jobs database, agent counts, and the paths below. |
-| **Codex Model** | **Auto (Codex default)** or any model your Codex sign-in offers. The list comes from the Codex CLI itself. Changing the model **invalidates cached queries, ratings and answers**, so the next run really uses the new model. The change applies from the next turn, without restarting Codex. |
-| **Codex CLI version / Check for update** | Shows the Codex version in use and updates it (download, sha512 check, two-way health check, switch over). |
+| **Codex Model** | With Codex: **Auto (Codex default)** or any model your Codex sign-in offers. The list comes from the Codex CLI itself. Changing the model **invalidates cached queries, ratings and answers**, so the next run really uses the new model. The change applies from the next turn, without restarting Codex. |
+| **AI engine** | **ChatGPT (Codex)** or **Your Claude Code**. Switching is refused while anything runs or the loop is on. Switching engines re-runs cached searches and ratings with the new engine. |
+| **Claude model** | With Claude Code: its default, or `sonnet`, `opus`, `haiku` or any model id your Claude Code accepts. Part of the cache keys, like the Codex model. |
+| **Let Claude Code drive JobScan** | Lets a Claude Code session with the jobscan plugin start the safe steps and hear what happens ([section 13](#13-let-claude-code-drive-jobscan)). Off by default. |
 | **Rating Agents** | Rating batches running at once (default **5**). Changes speed, not results, so it isn't part of any cache key. |
 | **Payload Agents** | Application agents running at once (default **6**; loop runs use at most 5. [Why](#7-applications-how-a-form-gets-filled-and-submitted)). |
 | **OTP Email (IMAP)** | Shows the connected mailbox. **Reconfigure →** to change it. |
 | **Applied jobs** | **View history →**. |
-| **Paths** | `jobscan.exe path`, `Python package dir (JOB_AUTOMATOR_PYTHON_DIR)` and `Job automator home (JOB_AUTOMATOR_HOME)`. They're found automatically; change them only if you've moved things. |
-| **Logout** | Signs out of ChatGPT and returns to the login screen. |
+| **Paths** | `jobscan.exe path`, `Python package dir (JOB_AUTOMATOR_PYTHON_DIR)`, `Job automator home (JOB_AUTOMATOR_HOME)`, and the Codex CLI or Claude Code path. They're found automatically; change them only if you've moved things. |
+| **Logout** | With Codex: signs out of ChatGPT and returns to the login screen. Hidden with Claude Code, which JobScan never signs out. |
 
 ### 12. Loop mode
 
@@ -592,6 +601,24 @@ The panel also shows **today's count**, **Codex usage** (5-hour and weekly windo
 <img src="docs/screenshots/13-loop-chip.png" alt="Header chip reading 'Round 6 · Applying' while loop mode runs on the board" width="100%">
 
 ---
+
+### 13. Let Claude Code drive JobScan
+
+Turn on **Settings → Let Claude Code drive JobScan**, install the plugin once, and a Claude Code session can run JobScan for you while you talk to it:
+
+```bash
+claude plugin install jobscan --marketplace tarunmovva/JobScanAI   # or a local clone: --marketplace /path/to/jobscan-ai
+```
+
+Then type `/jobscan:jobscan` in Claude Code. The session can do six things, each only where and when its button in the window works: **rebuild the job database**, **cancel a rebuild**, **find jobs**, **find more** ("remote Rust roles"), **rate the jobs**, and **stop the loop**. It hears every step, every click you make in the window and every AI call as short notices, and it can leave notes that appear in a chip in JobScan's header.
+
+What it can't do is the point:
+
+- **It can't apply.** Choosing jobs, filling, submitting, starting the loop, changing settings and opening files stay in the window, with you.
+- **It never sees a job posting.** Notices and status are numbers and fixed labels; titles, companies, links, descriptions and model replies never reach the session, so a posting can't talk to an agent that has a shell.
+- **Only this computer, only this launch.** JobScan listens on `127.0.0.1` with a new token each launch, refuses anything a web page sends, and writes the token only into its own data folder. JobScan holds a single-instance lock while this is on.
+
+The AI work itself (searches, ratings, answers) is still done by JobScan with the engine you picked, so the session only drives and watches. See [`jobscan-harness/README.md`](jobscan-harness/README.md).
 
 ## 💸 Built to save cost
 
@@ -698,6 +725,8 @@ JOBSCAN_USER_DATA_DIR=~/jobscan-test npm run dev
 | `JOB_AUTOMATOR_AI_RECOVERY=0` | turn off the repair agent (failed fills stay failed) |
 | `JOB_AUTOMATOR_RECOVERY_TIMEOUT` | seconds per repair attempt (default 720) |
 | `JOB_AUTOMATOR_OTP_TIMEOUT_SECONDS` | how long to wait for an emailed code (default 120) |
+| `JOBSCAN_CODEX_BIN` | the Codex CLI to run, when it isn't found on its own (Settings has the same) |
+| `JOBSCAN_HARNESS_FILE` | for the jobscan plugin: the `harness.json` to use instead of the app's data folder |
 
 Set a variable in the terminal you start the app from, then run `npm run dev` in that same terminal:
 
@@ -715,6 +744,9 @@ A variable set this way lasts until that terminal is closed. To clear it sooner:
 cd jobscan-app
 npm run test:unit      # typecheck + unit tests
 npm run test:e2e       # builds, then drives the app with Playwright (in its own Electron profile)
+# Real runs with your own Claude Code (they spend your plan; never in CI):
+npx playwright test --config scripts/claude-smoke/playwright.config.ts smoke          # searches + ratings
+npx playwright test --config scripts/claude-smoke/playwright.config.ts orchestrator   # a Claude Code session drives it
 
 cd ../jobscan
 go test ./...

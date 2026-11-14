@@ -17,7 +17,7 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "test:e2e": "npm run build && playwright test",
     "typecheck": "tsc --build tsconfig.json --force",
-    "test:unit": "npm run typecheck && tsc electron/agent-loop.ts electron/board-state.ts electron/applied-jobs.ts electron/record-files.ts electron/field-summary.ts electron/job-context-sql.ts electron/payload-builder.ts electron/needs-you.ts electron/chrome-tabs.ts electron/query-flags.ts electron/tab-stages.ts electron/interrupted-run.ts electron/record-header.ts electron/store-cache.ts electron/loop-policy.ts electron/run-mode.ts electron/proc.ts electron/queue-sql.ts electron/board-tags.ts electron/pool.ts electron/search-output.ts electron/agent-result.ts electron/codex-account.ts electron/loop-runner.ts electron/selection.ts electron/loop-copy.ts electron/store-sidecars.ts electron/app-paths.ts electron/codex-platform.ts electron/quit-guard.ts electron/codex-requests.ts electron/codex-health.ts electron/codex-probe.ts electron/binary-warmup.ts electron/cdp.ts electron/codex-home.ts electron/turn-buffer.ts electron/prompts.ts electron/ai-engine.ts electron/claude-cli.ts electron/claude-engine.ts electron/notices.ts electron/harness-server.ts electron/agent-actions.ts --module commonjs --target es2020 --moduleResolution node --outDir out/unit --skipLibCheck --esModuleInterop && node --test \"tests/unit/**/*.test.cjs\""
+    "test:unit": "npm run typecheck && tsc electron/agent-loop.ts electron/board-state.ts electron/applied-jobs.ts electron/record-files.ts electron/field-summary.ts electron/job-context-sql.ts electron/payload-builder.ts electron/needs-you.ts electron/chrome-tabs.ts electron/query-flags.ts electron/tab-stages.ts electron/interrupted-run.ts electron/record-header.ts electron/store-cache.ts electron/loop-policy.ts electron/run-mode.ts electron/proc.ts electron/queue-sql.ts electron/board-tags.ts electron/pool.ts electron/search-output.ts electron/agent-result.ts electron/codex-account.ts electron/loop-runner.ts electron/selection.ts electron/loop-copy.ts electron/store-sidecars.ts electron/app-paths.ts electron/codex-platform.ts electron/quit-guard.ts electron/codex-requests.ts electron/codex-health.ts electron/binary-warmup.ts electron/cdp.ts electron/codex-home.ts electron/turn-buffer.ts electron/prompts.ts electron/ai-engine.ts electron/claude-cli.ts electron/claude-engine.ts electron/notices.ts electron/harness-server.ts electron/agent-actions.ts electron/codex-locate.ts --module commonjs --target es2020 --moduleResolution node --outDir out/unit --skipLibCheck --esModuleInterop && node --test \"tests/unit/**/*.test.cjs\""
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
@@ -45,7 +45,6 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/source-serif-4": "^5.2.9",
     "@fontsource/space-grotesk": "^5.2.10",
-    "@openai/codex": "^0.153.4",
     "electron-store": "^8.2.0",
     "framer-motion": "^12.42.2",
     "lucide-react": "^0.400.0",

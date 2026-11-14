@@ -55,7 +55,6 @@ async function start(engine: 'claude' | 'codex', extra: Record<string, unknown> 
     jobscanExePath: exe,
     jobAutomatorHome: path.join(root, 'home'),
     pythonDir: path.join(REPO, 'jobscan'),
-    codexAutoUpdate: false,
     ratingAgents: 3,
     payloadAgents: 2,
     lastFetchAt: new Date().toISOString(),

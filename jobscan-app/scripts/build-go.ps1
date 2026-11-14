@@ -25,24 +25,4 @@ Remove-Item Env:\GOOS -ErrorAction SilentlyContinue
 Remove-Item Env:\GOARCH -ErrorAction SilentlyContinue
 Pop-Location
 
-Write-Host "Copying Codex native binaries..."
-# The vendored binary moved from vendor/<triple>/codex/ to vendor/<triple>/bin/
-# somewhere between 0.128 and 0.153. Probe both so a pin bump cannot silently
-# ship no binary (or leave a stale one behind in resources/bin).
-function Copy-Codex($Pkg, $Triple, $Exe, $Dest, $Label) {
-  foreach ($Sub in @("bin", "codex")) {
-    $Src = "$NM\@openai\$Pkg\vendor\$Triple\$Sub\$Exe"
-    if (Test-Path $Src) {
-      Copy-Item $Src $Dest -Force
-      Write-Host "  v codex $Label (vendor/$Triple/$Sub)"
-      return
-    }
-  }
-  Write-Host "  ! codex $Label not found under vendor/$Triple/{bin,codex}"
-}
-
-Copy-Codex "codex-win32-x64"    "x86_64-pc-windows-msvc" "codex.exe" "$BinDir\codex-win-x64.exe" "win-x64"
-Copy-Codex "codex-darwin-arm64" "aarch64-apple-darwin"   "codex"     "$BinDir\codex-mac-arm64"   "mac-arm64"
-Copy-Codex "codex-darwin-x64"   "x86_64-apple-darwin"    "codex"     "$BinDir\codex-mac-x64"     "mac-x64"
-
 Write-Host "Done."

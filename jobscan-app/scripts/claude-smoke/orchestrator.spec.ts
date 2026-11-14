@@ -24,6 +24,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import http from 'http'
+import { endRun } from './teardown'
 
 const APP_ROOT = path.resolve(__dirname, '..', '..')
 const REPO = path.resolve(APP_ROOT, '..')
@@ -74,7 +75,7 @@ test('a real Claude Code session drives JobScan; the app answers forms with Clau
   fs.writeFileSync(resumePath, resume)
   fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({
     aiEngine: 'claude', claudeModel: process.env['SMOKE_MODEL'] ?? 'sonnet', harnessEnabled: true,
-    jobscanExePath: exe, jobAutomatorHome: home, pythonDir: path.join(REPO, 'jobscan'), codexAutoUpdate: false,
+    jobscanExePath: exe, jobAutomatorHome: home, pythonDir: path.join(REPO, 'jobscan'),
     ratingAgents: 3, payloadAgents: 2, resumeText: resume, resumePath,
     profileTargetLocations: 'Remote US, or San Francisco / New York', profileSponsorshipNeed: 'no-sponsorship',
     profileVisaSituation: 'US citizen, no restrictions', profileCitizenship: 'United States',
@@ -210,11 +211,8 @@ test('a real Claude Code session drives JobScan; the app answers forms with Clau
     report['appErrors'] = lines.filter(l => /error|failed/i.test(l) && !l.startsWith('[claude]')).slice(0, 20)
     fs.writeFileSync(path.join(root, 'report.json'), JSON.stringify(report, null, 2))
     console.log('\n===== ORCHESTRATOR REPORT =====\n' + JSON.stringify(report, null, 2))
-    await app.close().catch(() => { /* gone */ })
-    // A scratch Chrome on 9223, if extraction started one, goes with the folder.
-    try {
-      if (process.platform === 'win32') execSync(`wmic process where "commandline like '%${path.basename(root)}%' and name='chrome.exe'" call terminate`, { stdio: 'ignore' })
-    } catch { /* none */ }
+    // The scratch Chrome on 9223 (extraction started one) goes before the app.
+    console.log(`app ${await endRun(app, root)}`)
     if (process.env['SMOKE_KEEP'] !== '1') fs.rmSync(root, { recursive: true, force: true })
   }
 })

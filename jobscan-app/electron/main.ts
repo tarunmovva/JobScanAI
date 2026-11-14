@@ -12,8 +12,7 @@ import { setPipelineWindow, setState, isPipelineActive } from './pipeline'
 import { createLoop, type Loop } from './loop-runner'
 import { createLoopDeps } from './loop-deps'
 import type { LoopState } from '../src/types'
-import { setBusyCheck, scheduleCodexUpdateCheck } from './codex-updater'
-import { clearCodexClient, checkAuth } from './codex-client'
+import { clearCodexClient, checkAuth, listCodexModels, reconcileSavedModel } from './codex-client'
 import { ensureProfiles, syncActiveSnapshot } from './profiles'
 import store from './state-store'
 import { createQuitGuard } from './quit-guard'
@@ -147,6 +146,8 @@ function createWindow(): void {
 // Keys from removed features (Auto-Apply scheduler, standalone search step);
 // scrubbed so old configs stay clean (delete of a missing key is a no-op).
 const REMOVED_KEYS = [
+  // The bundled Codex and its updater are gone (Codex is now the user's own CLI).
+  'codexAutoUpdate', 'codexManagedVersion', 'codexUpdateCheckedAt', 'codexRejectedVersions',
   'automationEnabled', 'automationPaused', 'automationRunIntervalMin',
   'automationFetchIntervalMin', 'automationMinRating', 'automationMaxPerRun',
   'automationAutoPauseFailures', 'automationConsecutiveFailures',
@@ -191,6 +192,9 @@ app.whenReady().then(() => {
   // kept, so walking forward again re-emits cached results instantly.
   setState(claudeMode || checkAuth() ? 'resume' : 'auth')
   for (const key of REMOVED_KEYS) store.delete(key as never)
+  // The updater's downloaded Codex copies lived here; nothing uses them now.
+  // Only this app's own folder -- never the user's ~/.codex.
+  try { fs.rmSync(path.join(app.getPath('userData'), 'codex'), { recursive: true, force: true }) } catch { /* in use */ }
   ensureProfiles() // migrate first launch to a "Default" profile + crash-heal snapshot
   // Loop mode is always off at launch. A round still marked active means the
   // app went down mid-round without the quit handler (a crash): say so. The
@@ -220,11 +224,16 @@ app.whenReady().then(() => {
     }).catch(() => { /* stays on Resume; AI steps report the problem */ })
     return
   }
-  // Keep the Codex CLI current. Deferred and non-blocking: a bundled binary
-  // ages out of being able to read the model list, but a slow or failed
-  // registry check must never delay the window or break a launch.
-  setBusyCheck(isPipelineActive)
-  scheduleCodexUpdateCheck()
+  // A saved Codex model the API has since withdrawn fails every turn: check it
+  // once, deferred and off the critical path, and reset it to Auto if gone.
+  // Never while a run is going (it starts the app-server); never in tests.
+  setTimeout(() => {
+    if (process.env['E2E_TEST'] === '1' || isPipelineActive() || store.get('aiEngine') === 'claude') return
+    if (!String(store.get('codexModel') ?? '').trim()) return
+    listCodexModels()
+      .then(models => { reconcileSavedModel(models.map(m => m.id)) })
+      .catch(() => { /* no Codex, or signed out: the next turn says so */ })
+  }, 15_000).unref?.()
 })
 
 app.on('window-all-closed', () => {

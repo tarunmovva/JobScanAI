@@ -21,10 +21,7 @@ interface StoreSchema {
   claudePath?: string           // optional: the Claude Code binary, when it is not found on its own
   harnessEnabled?: boolean      // "Let Claude Code drive JobScan" (harness.ts), off by default
   codexModel: string            // '' = Auto — codex default / first-listed model
-  codexAutoUpdate: boolean      // keep the Codex CLI current (default true)
-  codexManagedVersion: string   // last version health-checked into userData
-  codexUpdateCheckedAt: string  // ISO — throttles the registry check to once a day
-  codexRejectedVersions?: string[]  // Codex versions found not to speak this app's protocol: never used again
+  codexPath?: string            // optional: the user's Codex CLI, when it is not found on its own (codex-locate.ts)
   jobscanExePath: string
   pythonDir: string
   jobAutomatorHome: string
@@ -108,9 +105,6 @@ const store = new Store<StoreSchema>({
     ratingAgents: 5,
     payloadAgents: 6,
     codexModel: '',
-    codexAutoUpdate: true,
-    codexManagedVersion: '',
-    codexUpdateCheckedAt: '',
     jobscanExePath: PATHS.jobscanExePath,
     pythonDir: PATHS.pythonDir,
     jobAutomatorHome: PATHS.jobAutomatorHome,

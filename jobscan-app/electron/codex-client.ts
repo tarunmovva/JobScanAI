@@ -5,8 +5,7 @@ import fs from 'fs'
 import os from 'os'
 import { app } from 'electron'
 import store from './state-store'
-import { codexPlatform } from './codex-platform'
-import { resolveManagedBinary, reportCodexProtocolFailure } from './codex-updater'
+import { locateUserCodex } from './codex-locate'
 import { threadStartParams, turnStartParams } from './codex-requests'
 import { CORE_METHODS, isProtocolError, createStartupCrashCounter } from './codex-health'
 import { warmBinary } from './binary-warmup'
@@ -35,86 +34,35 @@ const SHUTDOWN_GRACE_MS = 8_000  // wait for codex to checkpoint WAL + exit clea
 
 // ── Binary resolution ────────────────────────────────────────────────────────
 //
-// On Windows we spawn the native codex.exe directly rather than going through
-// codex.js → codex.exe. The codex.js wrapper re-spawns the native binary with
-// stdio:"inherit" and no windowsHide, which creates a visible console window
-// that we cannot suppress from our side. Spawning codex.exe directly lets our
-// windowsHide:true take effect and prevents the console flash/persistent window.
+// JobScan no longer ships Codex: it runs the user's own Codex CLI, found by
+// codex-locate.ts (the Settings path, then the npm install). The native
+// binary is spawned directly, never the codex.js launcher or the Windows
+// .cmd shim -- the launcher re-spawns the binary without windowsHide, which
+// opens a console window we cannot suppress.
 
-// One table with the updater (codex-platform.ts): ARM Windows included.
-const PLATFORM_BINARY = codexPlatform(process.platform, process.arch)
+export const CODEX_NOT_FOUND =
+  'Codex CLI was not found. Install it with: npm install -g @openai/codex -- or switch to your Claude Code in Settings.'
 
 function resolveCodexNativeBinary(): string | null {
-  if (!PLATFORM_BINARY) return null
-  const { exe, bundled } = PLATFORM_BINARY
-
-  // 0. userData/codex/<version>/ — auto-updated and health-checked by
-  //    codex-updater. Preferred over the bundled binary because the bundled one
-  //    ages out: 0.128 stopped being able to decode the model list the API
-  //    returns, and silently served its own compiled-in list instead.
-  const managed = resolveManagedBinary()
-  if (managed) return managed
-
-  // 1. resources/bin/ — populated by build scripts, works in both dev and packaged
-  const resPath: string =
-    (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath ??
-    path.join(__dirname, '..', '..', 'resources')
-
-  const resBin = path.join(resPath, 'bin', bundled)
-  if (fs.existsSync(resBin)) return resBin
-
-  // 2. node_modules fallback (dev only — not readable from asar in packaged mode)
-  //
-  // The vendored binary moved from vendor/<triple>/codex/ to vendor/<triple>/bin/
-  // between 0.128 and 0.153; probe both so a pin bump doesn't resolve to nothing.
-  const { pkg, triple } = PLATFORM_BINARY
-  const roots: string[] = [
-    path.join(app.getAppPath(), 'node_modules'),
-    path.join(__dirname, '..', '..', 'node_modules'),
-    path.join(__dirname, '..', 'node_modules'),
-    ...(process.env['APPDATA']
-      ? [path.join(process.env['APPDATA'], 'npm', 'node_modules')]
-      : []),
-    ...(process.env['LOCALAPPDATA']
-      ? [path.join(process.env['LOCALAPPDATA'], 'npm', 'node_modules')]
-      : []),
-  ]
-  const candidates: string[] = []
-  for (const root of roots) {
-    for (const sub of ['bin', 'codex']) {
-      candidates.push(path.join(root, '@openai', pkg, 'vendor', triple, sub, exe))
-    }
-  }
-  return candidates.find(p => { try { return fs.existsSync(p) } catch { return false } }) ?? null
+  return locateUserCodex({
+    setting: String(store.get('codexPath') ?? ''),
+    env: process.env,
+    platform: process.platform,
+    arch: process.arch,
+    homedir: os.homedir(),
+  })
 }
 
 /**
- * The codex binary this app will actually run, or null when only the codex.js
- * wrapper is available. Exported so the Go/Python side can be pinned to the same
- * one via JOB_AUTOMATOR_CODEX_BIN — an auto-update that moved only the
- * app-server surface would leave form recovery on a different version.
+ * The codex binary this app will actually run, or null when none is
+ * installed. Exported so the Go/Python side runs the SAME one via
+ * JOB_AUTOMATOR_CODEX_BIN -- form repair on a different Codex than the
+ * app-server side would be two versions to keep working.
  */
 export function getCodexBinaryPath(): string | null {
   // Under E2E_TEST the Python side must not find a real Codex through us.
   if (e2eCodexCommand()) return null
   return resolveCodexNativeBinary()
-}
-
-// Fallback: codex.js script (used only when native binary not found)
-function resolveCodexScriptPath(): string | null {
-  const rel = path.join('@openai', 'codex', 'bin', 'codex.js')
-  const candidates: string[] = [
-    path.join(app.getAppPath(), 'node_modules', rel),
-    path.join(__dirname, '..', '..', 'node_modules', rel),
-    path.join(__dirname, '..', 'node_modules', rel),
-    ...(process.env['APPDATA']
-      ? [path.join(process.env['APPDATA'], 'npm', 'node_modules', rel)]
-      : []),
-    ...(process.env['LOCALAPPDATA']
-      ? [path.join(process.env['LOCALAPPDATA'], 'npm', 'node_modules', rel)]
-      : []),
-  ]
-  return candidates.find(p => { try { return fs.existsSync(p) } catch { return false } }) ?? null
 }
 
 export function buildSpawnEnv(): NodeJS.ProcessEnv {
@@ -143,33 +91,14 @@ export interface CodexSpawnSpec {
   shell: boolean
 }
 
+/** How to start Codex with `cliArgs`. Throws CODEX_NOT_FOUND when none is installed. */
 export function getCodexSpawnSpec(cliArgs: string[]): CodexSpawnSpec {
   // Tests: a stand-in app-server, or nothing at all — never the user's Codex.
   const e2e = e2eCodexCommand()
   if (e2e) return { command: e2e.command, args: [...e2e.args, ...cliArgs], shell: false }
-
-  // Try native binary first on all platforms — avoids the codex.js wrapper which
-  // re-spawns the binary without windowsHide, creating visible console windows.
   const native = resolveCodexNativeBinary()
-  if (native) {
-    return { command: native, args: cliArgs, shell: false }
-  }
-
-  // Fallback: codex.js script via node (non-Windows or native binary not found)
-  if (process.platform !== 'win32') {
-    const script = resolveCodexScriptPath()
-    if (script) {
-      return { command: process.execPath, args: [script, ...cliArgs], shell: false }
-    }
-    return { command: 'codex', args: cliArgs, shell: false }
-  }
-
-  // Windows fallback: script or cmd.exe
-  const script = resolveCodexScriptPath()
-  if (script) {
-    return { command: process.execPath, args: [script, ...cliArgs], shell: false }
-  }
-  return { command: 'cmd.exe', args: ['/c', 'codex.cmd', ...cliArgs], shell: false }
+  if (!native) throw new Error(CODEX_NOT_FOUND)
+  return { command: native, args: cliArgs, shell: false }
 }
 
 // ── Pending state ─────────────────────────────────────────────────────────────
@@ -215,17 +144,14 @@ class CodexAppServerClient {
   private pendingTurns: Map<string, PendingTurn> = new Map()
   private earlyTurnEvents = new EarlyTurnEvents()
   private closed = true
-  /** The binary this client started: what a protocol failure rolls back. */
+  /** The binary this client started (named when it fails the protocol check). */
   private command = ''
   private answeredInit = false
-  /** Rolled back: this client starts nothing again. The next call gets a new one. */
-  private retired = false
-  /** Shut down (cancel, quit, sign-out): likewise starts nothing again. */
+  /** Shut down (cancel, quit, sign-out): this client starts nothing again. */
   private disposed = false
 
   /** Why this client refuses to start anything, or '' when it may. */
   private refusal(): string {
-    if (this.retired) return 'Codex was rolled back after a protocol error; the next call uses the previous version'
     if (this.disposed) return 'Codex was shut down'
     return ''
   }
@@ -344,8 +270,8 @@ class CodexAppServerClient {
   }
 
   private sendRequest(method: string, params?: unknown, restarted = false): Promise<unknown> {
-    // A call already in flight when its client was rolled back or shut down
-    // must not start a process of its own: nothing would own it.
+    // A call already in flight when its client was shut down must not start
+    // a process of its own: nothing would own it.
     const no = this.refusal()
     if (no) return Promise.reject(new Error(no))
     if (!this.child || this.closed) {
@@ -513,17 +439,12 @@ class CodexAppServerClient {
 
   /**
    * This Codex does not speak the app's protocol (codex-health.ts decides).
-   * An updated version is rolled back: the next call starts the previous
-   * verified one, else the bundled one. The bundled one has nothing older.
+   * It is the user's own install, so there is no older verified copy to fall
+   * back to -- as with the bundled binary before, the failing call reports
+   * it, and updating Codex is the fix.
    */
   private protocolFailure(detail: string): void {
-    if (!reportCodexProtocolFailure(this.command, detail)) return
-    this.retired = true
-    if (_client === this) _client = null
-    // Every other turn in flight on this process fails now, not at its
-    // 3-minute timeout; the next call starts the previous version.
-    this.handleCrash(new Error(`Codex rolled back after a protocol error: ${detail}`))
-    void this.shutdown()
+    console.error(`[codex] ${this.command} does not speak JobScan's protocol (update it with npm install -g @openai/codex): ${detail}`)
   }
 
   async shutdown(): Promise<void> {
@@ -562,8 +483,8 @@ let _client: CodexAppServerClient | null = null
 
 /**
  * App-server deaths before `initialize` is answered, in a row, per binary
- * (codex-health.ts): a version rolled back for it must not count against
- * the one that replaces it.
+ * (codex-health.ts): a Codex the user swaps in (Settings path, reinstall)
+ * starts with a clean count.
  */
 const startupCrashes = new Map<string, ReturnType<typeof createStartupCrashCounter>>()
 function startupCrashesFor(command: string): ReturnType<typeof createStartupCrashCounter> {
@@ -606,6 +527,20 @@ export async function runCodexThread(
   onToken?: (t: string) => void
 ): Promise<string> {
   return getClient().runTurn(systemPrompt, userMessage, onToken)
+}
+
+/**
+ * A saved model that the API no longer offers is not a cosmetic problem: every
+ * turn fails with `400 The '<id>' model is not supported`, which takes the whole
+ * pipeline down. Model ids come and go, so reset to Auto rather than leave the
+ * app wedged. Returns the id that was cleared, or null.
+ */
+export function reconcileSavedModel(availableIds: string[]): string | null {
+  const saved = String(store.get('codexModel') ?? '').trim()
+  if (!saved || availableIds.length === 0 || availableIds.includes(saved)) return null
+  store.set('codexModel', '' as never)
+  console.warn(`[codex] saved model "${saved}" is no longer offered — reset to Auto`)
+  return saved
 }
 
 export async function listCodexModels(): Promise<CodexModelOption[]> {

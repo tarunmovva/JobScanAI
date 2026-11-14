@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 Set-Location (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location ..
 Write-Host "=== JobScan AI — Full Build (Windows) ==="
-Write-Host "`nStep 1/4: Cross-compile Go CLI + copy Codex binaries..."
+Write-Host "`nStep 1/4: Cross-compile Go CLI..."
 & .\scripts\build-go.ps1
 Write-Host "`nStep 2/4: Bundle Python..."
 & .\scripts\build-python.ps1

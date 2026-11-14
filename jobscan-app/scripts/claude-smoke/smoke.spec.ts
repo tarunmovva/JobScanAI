@@ -25,6 +25,7 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { endRun } from './teardown'
 
 const APP_ROOT = path.resolve(__dirname, '..', '..')
 const REPO = path.resolve(APP_ROOT, '..')
@@ -90,7 +91,6 @@ test('Claude Code writes the searches and rates the jobs', async () => {
     jobscanExePath: s.exe,
     jobAutomatorHome: path.join(s.root, 'home'),
     pythonDir: path.join(REPO, 'jobscan'),
-    codexAutoUpdate: false,
     ratingAgents: 3,
     payloadAgents: 2,
     resumeText: RESUME,
@@ -105,7 +105,7 @@ test('Claude Code writes the searches and rates the jobs', async () => {
   const app = await electron.launch({
     args: [path.join(APP_ROOT, 'out', 'main', 'main.js')],
     cwd: APP_ROOT,
-    env: { ...process.env, ...s.env },
+    env: { ...process.env, ...s.env } as Record<string, string>,
     timeout: 60_000,
   })
   app.process().stdout?.on('data', d => logs.push(String(d)))
@@ -166,7 +166,7 @@ test('Claude Code writes the searches and rates the jobs', async () => {
     report['errors'] = logs.join('').split(/\r?\n/).filter(l => /error|failed/i.test(l) && !/^\[claude\]/.test(l)).slice(0, 15)
     fs.writeFileSync(path.join(s.root, 'report.json'), JSON.stringify(report, null, 2))
     console.log('\n===== SMOKE REPORT =====\n' + JSON.stringify(report, null, 2))
-    await app.close().catch(() => { /* already gone */ })
+    console.log(`app ${await endRun(app, s.root)}`)
     if (process.env['SMOKE_KEEP'] !== '1') fs.rmSync(s.root, { recursive: true, force: true })
   }
 })

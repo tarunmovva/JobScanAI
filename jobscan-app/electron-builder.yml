@@ -17,6 +17,8 @@ extraResources:
     filter:
       - "**/*"
       - "!**/.gitkeep"
+      # Codex is the user's own CLI now; a copy left by an older build-go run is not shipped.
+      - "!bin/codex*"
 
 # No native node modules: nothing to rebuild for Electron.
 npmRebuild: false
