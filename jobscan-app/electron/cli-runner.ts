@@ -2,7 +2,7 @@ import { spawn, SpawnOptions, ChildProcess } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import store from './state-store'
-import { tokenizeQueryFlags } from './query-flags'
+import { tokenizeQueryFlags, searchFlagProblem } from './query-flags'
 import { getCodexBinaryPath, activeCodexModel } from './codex-client'
 import { unattendedEnv } from './run-mode'
 import { collectChild, killTree, treeSpawnOptions } from './proc'
@@ -122,6 +122,9 @@ function searchFlagSupport(): Promise<Set<string>> {
 
 /** A search's tokens, with the pool's defaults added where the search does not set them. */
 async function withSearchDefaults(searchTokens: string[]): Promise<string[]> {
+  // Last line of defence: callers already refuse these (query-flags.ts).
+  const unsafe = searchFlagProblem(searchTokens)
+  if (unsafe) throw new Error(unsafe)
   const tokens = [...searchTokens]
   // jobscan's default --limit is 25 — far too small for the retrieval pool.
   // Relevance sort (bm25, title-weighted) makes top-100 the right slice.

@@ -4,7 +4,7 @@
  * Pure. The search itself is passed in, so the rules for building a pool run
  * in unit tests without a jobs.db.
  */
-import { tokenizeQueryFlags } from './query-flags'
+import { tokenizeQueryFlags, searchFlagProblem } from './query-flags'
 import { newPostingsTokens } from './loop-policy'
 
 export interface PoolJob {
@@ -114,6 +114,13 @@ export async function researchPool<J extends PoolJob>(opts: {
     const { index, ...query } = placed
     opts.events?.started?.(index, query)
     const tokens = tokenizeQueryFlags(query.flags)
+    // A search saved before the flag allowlist existed is skipped, not run;
+    // the rest of the stage carries on (a throw here would fail all of it).
+    const unsafe = searchFlagProblem(tokens)
+    if (unsafe) {
+      opts.events?.failed?.(index, `Skipped: ${searchName(query)}`, unsafe)
+      continue
+    }
     const passes = opts.sinceDate ? [tokens, newPostingsTokens(tokens, opts.sinceDate)] : [tokens]
     let found = 0
     for (const pass of passes) {

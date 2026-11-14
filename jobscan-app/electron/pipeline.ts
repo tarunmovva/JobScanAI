@@ -24,7 +24,7 @@ import { applyBoardEvent, seedCards, emptyBoard, waitingCards, cardsNotStarted, 
 import { shouldAgentExit, AGENT_POLL_MS } from './agent-loop'
 import { summarizeFieldsForPrompt } from './field-summary'
 import { needsYouReason } from './needs-you'
-import { tokenizeQueryFlags } from './query-flags'
+import { tokenizeQueryFlags, searchFlagProblem } from './query-flags'
 import { recordHeader } from './record-header'
 import { killTree, collectChild, treeSpawnOptions, stopGently } from './proc'
 import { resetSelectedSql, markSkippedSql, abandonOthersSql } from './queue-sql'
@@ -805,6 +805,9 @@ async function validateQueryFlags(
   t?: CancelToken
 ): Promise<{ error: string | null; count: number | null }> {
   const tokens = tokenizeQueryFlags(flags)
+  // Same retry path as a flag the CLI rejects: the model is told why.
+  const unsafe = searchFlagProblem(tokens)
+  if (unsafe) return { error: unsafe, count: null }
   try {
     const { stdout, stderr, exitCode } = await runCli(['search', ...tokens, '--count'], undefined, t)
     if (exitCode !== 0 && stderr.trim()) return { error: stderr.trim().slice(0, 120), count: null }

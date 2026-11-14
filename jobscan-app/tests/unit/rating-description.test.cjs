@@ -22,7 +22,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const SRC = fs.readFileSync(
-  path.join(__dirname, '..', '..', 'electron', 'codex-client.ts'), 'utf-8')
+  path.join(__dirname, '..', '..', 'electron', 'prompts.ts'), 'utf-8')
 
 function constant(name) {
   const m = new RegExp(`export const ${name} = (\\d+)`).exec(SRC)

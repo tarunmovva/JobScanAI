@@ -23,6 +23,63 @@ const LIST_FLAGS = new Set([
   '--exclude-title-phrase', '--since', '--before', '--department', '--country',
 ])
 
+/**
+ * The `jobscan search` flags an AI-written query may use (jobscan/cmd/search.go).
+ *
+ * The flags are written by a model after it reads the résumé, and the
+ * saved ones are re-run every loop round. Anything else is refused: `--db`
+ * opens or creates any SQLite file, `-o/--output` overwrites any file --
+ * the app's own config.json, which holds the only record of past
+ * applications, included -- and `--format`/`--count` would change the
+ * output the app parses. The app appends its own `--count`,
+ * `--format json` and pool defaults after this check.
+ *
+ * true = takes a value, false = a switch.
+ */
+const SEARCH_FLAGS: ReadonlyMap<string, boolean> = new Map([
+  ['--desc', false], ['--raw', false], ['--remote', false], ['--hybrid', false],
+  ['--onsite', false], ['--fast', false], ['--no-expand', false], ['--dedupe', false],
+  ['--title-query', true], ['--key-query', true], ['--exclude-key-query', true],
+  ['--exclude-title-phrase', true], ['--location', true], ['--market', true],
+  ['--since', true], ['--before', true], ['--platform', true], ['--company', true],
+  ['--department', true], ['--type', true], ['--country', true], ['--sort', true],
+  ['--limit', true], ['--offset', true], ['--max-per-company', true],
+])
+/** Single-letter forms: -d (--desc, a switch) and -Q (--key-query, takes a value). */
+const SEARCH_SHORTHANDS: ReadonlyMap<string, boolean> = new Map([['d', false], ['Q', true]])
+
+/**
+ * Why these AI-written search tokens must not run, or null when they may.
+ * Reads them the way the CLI's flag parser does: `--flag=value`, a flag's
+ * value in the next token (even one starting with '-'), clustered
+ * single-letter switches (`-dQ value`), and `--` ending the flags.
+ */
+export function searchFlagProblem(tokens: readonly string[]): string | null {
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!
+    if (token === '--') return null
+    if (token.startsWith('--')) {
+      const eq = token.indexOf('=')
+      const name = eq === -1 ? token : token.slice(0, eq)
+      const takesValue = SEARCH_FLAGS.get(name)
+      if (takesValue === undefined) return `Search flag ${name} is not allowed; use only search filters such as --title-query, --key-query, --market or --since`
+      if (takesValue && eq === -1) i++          // its value is the next token
+      continue
+    }
+    if (token.startsWith('-') && token.length > 1) {
+      for (let c = 1; c < token.length; c++) {
+        const takesValue = SEARCH_SHORTHANDS.get(token[c]!)
+        if (takesValue === undefined) return `Search flag -${token[c]} is not allowed; use only search filters such as --title-query, --key-query, --market or --since`
+        if (takesValue) {
+          if (c === token.length - 1) i++        // -Q value
+          break                                  // -Qvalue: the rest is its value
+        }
+      }
+    }
+  }
+  return null
+}
+
 const TOKEN_RE = /(?:"([^"]*)")|(?:'([^']*)')|([^\s]+)/g
 
 export function tokenizeQueryFlags(queryFlags: string): string[] {
