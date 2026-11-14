@@ -14,7 +14,7 @@ import {
 import { cliDbExec } from './cli-runner'
 import { skipPlatformSql } from './queue-sql'
 import { closeTabsFor } from './chrome-tabs'
-import { codexLoginStatus, checkAuth, readRateLimits } from './codex-client'
+import { aiEngine, selectedEngineId } from './ai-engine'
 import { appliedKeys, isApplied } from './applied-jobs'
 import { queriesStale } from './loop-policy'
 import { extractFailures } from './selection'
@@ -45,9 +45,13 @@ export function createLoopDeps(getWindow: () => BrowserWindow | null): LoopDeps 
     signedIn: async () => {
       // e2e never spawns codex; a spec that needs a running loop says so.
       if (process.env['E2E_TEST'] === '1') return process.env['E2E_LOOP_SIGNED_IN'] === '1'
-      return (await codexLoginStatus()) ?? checkAuth()
+      // Codex: (await codexLoginStatus()) ?? checkAuth(), as before (ai-engine-codex.ts).
+      return aiEngine().ready()
     },
-    codexLimits: () => readRateLimits(),
+    aiName: () => (selectedEngineId() === 'claude' ? 'Claude Code' : 'Codex'),
+    // Codex reads its usage windows; Claude has none to read (null), so its
+    // limits are learned from the first call that hits one.
+    codexLimits: () => aiEngine().limits(),
     hasResume: () => String(store.get('resumeText') ?? '').trim().length > 0,
     exeExists: () => {
       try { return fs.existsSync(String(store.get('jobscanExePath') ?? '')) } catch { return false }

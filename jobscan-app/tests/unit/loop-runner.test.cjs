@@ -471,6 +471,11 @@ test('a precondition failure refuses to start, or stops at the next round', asyn
   assert.equal(h2.awake.at(-1), false)
 })
 
+test('with Claude Code as the engine, the loop names it, not Codex', async () => {
+  const h = harness(() => ({ signedIn: async () => false, aiName: () => 'Claude Code' }))
+  assert.deepEqual(await createLoop(h.deps).start(), { ok: false, reason: 'Claude Code is not signed in' })
+})
+
 test('every precondition names what is missing', async () => {
   const cases = [
     [{ hasResume: () => false }, 'No resume'],

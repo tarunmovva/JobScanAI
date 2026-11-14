@@ -23,6 +23,7 @@ export default function SettingsPanel({ onClose }: Props) {
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [codexUpdate, setCodexUpdate] = useState<CodexUpdateStatus | null>(null)
   const [checkingCodex, setCheckingCodex] = useState(false)
+  const [engineMsg, setEngineMsg] = useState('')
   const [showHistory, setShowHistory] = useState(false)
   const [profiles, setProfiles] = useState<ProfileInfo[]>([])
   const [activeProfileId, setActiveProfileId] = useState('')
@@ -76,27 +77,54 @@ export default function SettingsPanel({ onClose }: Props) {
     loadProfiles()
   }
 
-  useEffect(() => {
-    ipc.invoke<Settings>('settings:get').then(setS)
-    ipc.invoke<{ configured: boolean; host?: string; username?: string }>('imap:get-config').then(setImapInfo)
-    loadProfiles()
-
-    let alive = true
+  // Codex's model list and version: only while Codex is the engine (both
+  // start Codex, which Claude mode never does).
+  const aliveRef = useRef(true)
+  const loadCodexInfo = (): void => {
+    const alive = (): boolean => aliveRef.current
     ipc.invoke<CodexUpdateStatus>('codex:update-status')
-      .then(r => { if (alive) setCodexUpdate(r ?? null) })
+      .then(r => { if (alive()) setCodexUpdate(r ?? null) })
       .catch(() => { /* version line just stays hidden */ })
     ipc.invoke<{ models: CodexModelOption[]; error: string | null; clearedModel?: string }>('codex:list-models')
       .then(r => {
-        if (!alive) return
+        if (!alive()) return
         setModels(r?.models ?? [])
         setModelsLoaded(true)
         // The main process resets a saved model the API no longer offers —
         // mirror that here so the <select> doesn't keep showing the dead one.
         if (r?.clearedModel) setS(prev => ({ ...prev, codexModel: '' }))
       })
-      .catch(() => { if (alive) setModelsLoaded(true) })
-    return () => { alive = false }
+      .catch(() => { if (alive()) setModelsLoaded(true) })
+  }
+
+  useEffect(() => {
+    aliveRef.current = true
+    ipc.invoke<Settings>('settings:get').then(r => {
+      if (!aliveRef.current) return
+      setS(r)
+      if (r?.aiEngine !== 'claude') loadCodexInfo()
+    })
+    ipc.invoke<{ configured: boolean; host?: string; username?: string }>('imap:get-config').then(setImapInfo)
+    loadProfiles()
+    return () => { aliveRef.current = false }
   }, [])
+
+  const engine = s.aiEngine ?? 'codex'
+  const switchEngine = async (next: 'codex' | 'claude'): Promise<void> => {
+    if (next === engine) return
+    setEngineMsg('')
+    const r = await ipc.invoke<{ ok: boolean; error?: string; ready?: boolean; claudeFound?: boolean }>('engine:set', { engine: next })
+    if (!r?.ok) { setEngineMsg(r?.error ?? 'Could not switch right now.'); return }
+    setS(prev => ({ ...prev, aiEngine: next, ...(next === 'claude' ? { claudeFound: r.claudeFound } : {}) }))
+    if (next === 'claude') {
+      setEngineMsg(r.claudeFound === false
+        ? 'Claude Code was not found on this computer. Install it, or set its path under Paths.'
+        : r.ready ? 'Claude Code is signed in.' : 'Claude Code is not signed in: run claude in a terminal, then /login.')
+    } else {
+      setEngineMsg(r.ready ? '' : 'Codex is not signed in.')
+      loadCodexInfo()
+    }
+  }
 
   const save = async () => {
     await ipc.invoke('settings:save', s)
@@ -211,6 +239,54 @@ export default function SettingsPanel({ onClose }: Props) {
         <div className="flex flex-col gap-3">
           <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">AI Configuration</p>
           <div className="flex flex-col gap-1">
+            <label className="text-xs text-gray-400 font-medium">AI engine</label>
+            <div className="flex gap-2" role="group" aria-label="AI engine">
+              {(['codex', 'claude'] as const).map(id => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={engine === id}
+                  onClick={() => void switchEngine(id)}
+                  className={[
+                    'px-3 py-1.5 rounded-full text-sm border transition-colors',
+                    engine === id
+                      ? 'bg-orange-500/20 border-orange-500/50 text-orange-300'
+                      : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:bg-white/[0.08]',
+                  ].join(' ')}
+                >
+                  {id === 'codex' ? 'ChatGPT (Codex)' : 'Your Claude Code'}
+                </button>
+              ))}
+            </div>
+            {engineMsg && <p className="text-xs text-gray-400">{engineMsg}</p>}
+          </div>
+          {engine === 'claude' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-400 font-medium" htmlFor="claude-model">Claude model</label>
+              <input
+                id="claude-model"
+                list="claude-model-options"
+                value={String(s.claudeModel ?? '')}
+                placeholder="Default (Claude Code's own choice)"
+                onChange={e => setS(prev => ({ ...prev, claudeModel: e.target.value }))}
+                className="bg-[rgba(35,34,32,0.92)] border border-white/[0.08] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-500 placeholder-gray-600"
+              />
+              <datalist id="claude-model-options">
+                <option value="sonnet" />
+                <option value="opus" />
+                <option value="haiku" />
+              </datalist>
+              <p className="text-xs text-gray-500">
+                Each AI call runs your own Claude Code once, with no tools and none of your settings.
+                Form repair is off with this engine.
+              </p>
+              {s.claudeFound === false && (
+                <p className="text-xs text-amber-400">Claude Code was not found. Install it, or set its path under Paths.</p>
+              )}
+            </div>
+          )}
+          {engine !== 'claude' && (
+          <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-400 font-medium">Codex Model</label>
             <select
               value={storedModel}
@@ -263,6 +339,7 @@ export default function SettingsPanel({ onClose }: Props) {
               </p>
             )}
           </div>
+          )}
           {field('ratingAgents', 'Rating Agents (parallel threads)', 'number')}
           {field('payloadAgents', 'Payload Agents (parallel threads)', 'number')}
         </div>
@@ -308,16 +385,17 @@ export default function SettingsPanel({ onClose }: Props) {
           {field('jobscanExePath', 'jobscan.exe path')}
           {field('pythonDir', 'Python package dir (JOB_AUTOMATOR_PYTHON_DIR)')}
           {field('jobAutomatorHome', 'Job automator home (JOB_AUTOMATOR_HOME)')}
+          {engine === 'claude' && field('claudePath', 'Claude Code path (optional)', 'text', 'Found automatically when empty')}
         </div>
 
         <div className="flex gap-2 justify-between mt-2 pt-2 border-t border-white/[0.06]">
-          <button
+          {engine === 'claude' ? <span /> : <button
             onClick={() => handleLogout(onClose)}
             className="px-4 py-2 rounded-full bg-red-900/50 hover:bg-red-800 text-red-300 text-sm transition-colors"
             title="Sign out of ChatGPT and return to login screen"
           >
             Sign Out
-          </button>
+          </button>}
           <div className="flex gap-2">
             <button
               onClick={onClose}

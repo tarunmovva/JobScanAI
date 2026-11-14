@@ -7,7 +7,7 @@ import { spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import { monitorEventLoopDelay } from 'perf_hooks'
 import { registerIpcHandlers, registerLoopIpc } from './ipc-handlers'
-import { discardInterruptedRun, cancelActivePipeline } from './pipeline'
+import { discardInterruptedRun, cancelActivePipeline, ratingEngineCancel } from './pipeline'
 import { setPipelineWindow, setState, isPipelineActive } from './pipeline'
 import { createLoop, type Loop } from './loop-runner'
 import { createLoopDeps } from './loop-deps'
@@ -19,14 +19,15 @@ import store from './state-store'
 import { createQuitGuard } from './quit-guard'
 import { resolvePython } from './app-paths'
 import { codexHome } from './codex-home'
-import { registerEngines } from './ai-engine'
+import { registerEngines, aiEngine, selectedEngineId } from './ai-engine'
 import { createCodexEngine } from './ai-engine-codex'
+import { createClaudeEngineForApp, disposeClaudeWorkDir } from './ai-engine-claude'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The AI engines, registered before anything can make an AI call. The
 // machine-wide `aiEngine` setting picks one; Codex is the default.
-registerEngines({ codex: createCodexEngine() }, () => store.get('aiEngine'))
+registerEngines({ codex: createCodexEngine(), claude: createClaudeEngineForApp() }, () => store.get('aiEngine'))
 
 // ── Codex logs DB maintenance ────────────────────────────────────────────────
 //
@@ -171,7 +172,9 @@ function watchMainProcessStalls(): void {
 
 app.whenReady().then(() => {
   watchMainProcessStalls()
-  truncateCodexWal()  // crash-recovery safety net before any codex.exe spawn
+  // Claude Code answers the AI calls: nothing of Codex's runs or is touched.
+  const claudeMode = selectedEngineId() === 'claude'
+  if (!claudeMode) truncateCodexWal()  // crash-recovery safety net before any codex.exe spawn
   // A run interrupted by the app closing does not carry into this one.
   // Runs before the window so the renderer never renders the stale board.
   try {
@@ -185,7 +188,7 @@ app.whenReady().then(() => {
   // Every launch lands on Resume (Auth if logged out); the last session's
   // screen is never restored. Stage data (candidates, ratings, hashes) is
   // kept, so walking forward again re-emits cached results instantly.
-  setState(checkAuth() ? 'resume' : 'auth')
+  setState(claudeMode || checkAuth() ? 'resume' : 'auth')
   for (const key of REMOVED_KEYS) store.delete(key as never)
   ensureProfiles() // migrate first launch to a "Default" profile + crash-heal snapshot
   // Loop mode is always off at launch. A round still marked active means the
@@ -202,6 +205,15 @@ app.whenReady().then(() => {
   loop = createLoop(createLoopDeps(() => win))
   registerLoopIpc(loop)
   createWindow()
+  if (claudeMode) {
+    // Claude Code's sign-in is checked by running it, so not before the
+    // window: a launch never waits on it. Signed out, the sign-in screen
+    // explains what to do -- unless the user has already moved on.
+    void aiEngine().ready().then(ok => {
+      if (!ok && store.get('appState') === 'resume') setState('auth')
+    }).catch(() => { /* stays on Resume; AI steps report the problem */ })
+    return
+  }
   // Keep the Codex CLI current. Deferred and non-blocking: a bundled binary
   // ages out of being able to read the model list, but a slow or failed
   // registry check must never delay the window or break a launch.
@@ -279,6 +291,14 @@ app.on('before-quit', (event) => {
     // start; a manual run was confirmed above.
     if (looping || isPipelineActive()) {
       try { await cancelActivePipeline('quit') } catch { /* best effort */ }
+    }
+    if (selectedEngineId() === 'claude') {
+      // The detached rating engine is not under the run's token: stop it
+      // first (so a batch that settles now saves nothing), then end every
+      // Claude Code process -- none may outlive the app.
+      try { ratingEngineCancel() } catch { /* best effort */ }
+      try { await aiEngine().cancelAll('quit') } catch { /* best effort */ }
+      disposeClaudeWorkDir()
     }
     // Graceful codex shutdown so SQLite checkpoints WAL — prevents unbounded WAL growth
     // that causes "Codex RPC timeout: initialize" after many sessions.

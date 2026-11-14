@@ -96,6 +96,10 @@ export interface Settings {
   ratingAgents: number
   payloadAgents: number
   codexModel: string           // '' = Auto (Codex default / first-listed model)
+  aiEngine?: 'codex' | 'claude' // which engine answers the AI calls (read-only here: switch via engine:set)
+  claudeModel?: string         // '' = Claude Code's default
+  claudePath?: string          // optional path to Claude Code when it is not found on its own
+  claudeFound?: boolean        // read-only: Claude Code was found on this machine
   jobscanExePath: string
   pythonDir: string
   jobAutomatorHome: string

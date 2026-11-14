@@ -8,6 +8,8 @@ import { clearCodexClient, getCodexSpawnSpec, buildSpawnEnv, listCodexModels, co
 import { ensureLatestCodex, getUpdateStatus, reconcileSavedModel } from './codex-updater'
 import { focusApplicationTab } from './chrome-tabs'
 import { automatorPython } from './cli-runner'
+import { aiEngine, selectedEngineId, engineIdFrom } from './ai-engine'
+import { claudeBinary } from './ai-engine-claude'
 import {
   runQueryGen, runUserQueryGen, runRating,
   runExtract, runPayloadGen, runFetch, setState,
@@ -177,6 +179,8 @@ export function registerIpcHandlers(): void {
     // Match the goto-state→auth path: kill any running pipeline first so
     // Settings "Sign Out" doesn't leave child processes running.
     await cancelActivePipeline('logout')
+    // Claude mode never signs anyone out: the user's own Codex sign-in is theirs.
+    if (selectedEngineId() === 'claude') { setState('auth'); return }
     await clearCodexClient()
     setState('auth')
     // Run codex logout in background (best effort)
@@ -197,7 +201,9 @@ export function registerIpcHandlers(): void {
     // triggers (auth → resume) would race seeded-state assertions.
     // codexLoginStatus answers false under E2E_TEST without spawning.
     // Unknown (codex would not run) shows as signed out, as it always has.
-    const loggedIn = (await codexLoginStatus()) === true
+    // With Claude Code as the engine, "signed in" is Claude Code's own sign-in.
+    const claude = selectedEngineId() === 'claude'
+    const loggedIn = claude ? await aiEngine().ready() : (await codexLoginStatus()) === true
     if (loggedIn) {
       // Auto-advance ONLY when currently on auth screen — otherwise this
       // probe (which AuthScreen fires on mount during the brief moment
@@ -208,7 +214,7 @@ export function registerIpcHandlers(): void {
         setState('resume')
       }
     }
-    return { loggedIn }
+    return { loggedIn, engine: claude ? 'claude' : 'codex', ...(claude ? { claudeFound: claudeBinary() !== null } : {}) }
   })
 
   // ── Resume ────────────────────────────────────────────────────────────────
@@ -482,6 +488,10 @@ export function registerIpcHandlers(): void {
     imapConfigured: store.get('imapConfigured'),
     resumePath: store.get('resumePath'),
     // codexToken removed — auth managed by Codex CLI
+    aiEngine: selectedEngineId(),
+    claudeModel: store.get('claudeModel') ?? '',
+    claudePath: store.get('claudePath') ?? '',
+    claudeFound: claudeBinary() !== null,
   }))
 
   ipcMain.handle('settings:save', async (_e, partial: Record<string, unknown>) => {
@@ -490,6 +500,8 @@ export function registerIpcHandlers(): void {
       // as undefined; electron-store's set() throws on undefined, which made
       // the whole save reject and left the Settings panel stuck open.
       if (v === undefined) continue
+      // The engine changes only through engine:set, which refuses mid-run.
+      if (k === 'aiEngine' || k === 'claudeFound') continue
       store.set(k as never, v as never)
     }
     // Note: previously called clearCodexClient() to handle API-key rotation.
@@ -497,6 +509,20 @@ export function registerIpcHandlers(): void {
     // client mid-run interrupts the in-flight pipeline. Removed.
     // A saved codexModel applies on the NEXT turn — runTurn reads the store
     // per call — so no client restart is needed for model switches either.
+  })
+
+  // Which engine answers the AI calls. Window-only, refused while the loop is
+  // on (lockedWhileLooping) or while anything is running: a run, or a rating
+  // engine still scoring, would finish under the other engine and cache its
+  // results under the wrong hash.
+  lockedWhileLooping('engine:set', async (_e, arg?: { engine?: unknown }) => {
+    if (isPipelineActive() || isRatingEngineActive()) {
+      return { ok: false, reason: 'busy', error: 'Finish or stop the current run first.' }
+    }
+    const engine = engineIdFrom(arg?.engine)
+    store.set('aiEngine', engine)
+    const ready = await aiEngine().ready().catch(() => false)
+    return { ok: true, engine, ready, ...(engine === 'claude' ? { claudeFound: claudeBinary() !== null } : {}) }
   })
 
   // Models for the Settings dropdown. Never throws — the renderer always gets
@@ -644,6 +670,7 @@ export function registerIpcHandlers(): void {
     // Auth target: logout flow (kill codex + launch logout cli in background)
     if (target === 'auth') {
       await cancelActivePipeline('goto:auth')
+      if (selectedEngineId() === 'claude') { setState('auth'); return { ok: true } }
       await clearCodexClient()
       try {
         const spec = getCodexSpawnSpec(['logout'])

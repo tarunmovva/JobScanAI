@@ -7,7 +7,7 @@ const ALLOWED_INVOKE = new Set([
   'pipeline:start-extract', 'pipeline:start-payload-gen', 'pipeline:reset',
   'pipeline:goto-state',
   'selection:confirm',
-  'settings:get', 'settings:save', 'codex:list-models',
+  'settings:get', 'settings:save', 'codex:list-models', 'engine:set',
   'codex:update-status', 'codex:check-update',
   'chrome:focus-tab',
   'imap:get-config', 'imap:save-config', 'imap:test-connection',

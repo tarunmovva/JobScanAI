@@ -37,6 +37,8 @@ export interface ApplyResult {
 }
 
 export interface LoopDeps {
+  /** The engine's name in the loop's messages; 'Codex' when absent. */
+  aiName?: () => string
   now(): Date
   setTimer(fn: () => void, ms: number): unknown
   clearTimer(h: unknown): void
@@ -146,6 +148,7 @@ function whenText(iso: string, now: Date): string {
 }
 
 export function createLoop(deps: LoopDeps): Loop {
+  const aiName = (): string => deps.aiName?.() ?? 'Codex'
   let settings: LoopSettings
   let state: LoopState
   let breaker: BreakerState
@@ -248,7 +251,7 @@ export function createLoop(deps: LoopDeps): Loop {
       if (e instanceof Halt) throw e
       signed = false
     }
-    if (!signed) return STOP_REASONS.notSignedIn
+    if (!signed) return STOP_REASONS.notSignedIn.replace('Codex', aiName())
     if (!deps.hasResume()) return STOP_REASONS.noResume
     const saved = deps.savedQueries()
     if (saved.length === 0) return STOP_REASONS.noSearches
@@ -477,7 +480,7 @@ export function createLoop(deps: LoopDeps): Loop {
       failedRounds++
       lastFailure = end.error
     } else if (end.kind === 'codex') {
-      r.rec.error = CODEX_LIMIT
+      r.rec.error = CODEX_LIMIT.replace('Codex', aiName())
       r.rec.codexLimit = true
     } else if (r.halted === 'timeout') {
       r.rec.error = ROUND_TOO_LONG
@@ -572,8 +575,8 @@ export function createLoop(deps: LoopDeps): Loop {
         return { asSkipped: true, message: 'Submit clicked but not confirmed — it may have gone in. Look for a confirmation email before applying by hand.' }
       case 'codex':
         return isCodexLimit(`${r.status} ${r.detail}`)
-          ? { asSkipped: true, message: 'Codex usage limit — not applied; the loop tries again after the limit resets.' }
-          : { asSkipped: true, message: 'Codex stopped — not applied; the loop tries again next round.' }
+          ? { asSkipped: true, message: `${aiName()} usage limit — not applied; the loop tries again after the limit resets.` }
+          : { asSkipped: true, message: `${aiName()} stopped — not applied; the loop tries again next round.` }
       default:
         return { asSkipped: false }
     }
@@ -597,7 +600,7 @@ export function createLoop(deps: LoopDeps): Loop {
         r.reached.add(jobKey(job.platform, job.job_id))
         if (r.halted) return skip(job, 'The loop stopped — not applied.')
         if (r.codexLimitText != null) {
-          return skip(job, 'Codex usage limit — not started; the loop tries again after the limit resets.')
+          return skip(job, `${aiName()} usage limit — not started; the loop tries again after the limit resets.`)
         }
         const now = deps.now()
         if (isPaused(breaker, job.platform, now)) {
