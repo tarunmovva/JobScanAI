@@ -1,0 +1,54 @@
+*.exe
+# The jobscan CLI built from source by jobscan-app/scripts/setup.mjs (macOS/Linux name)
+/jobscan
+*.test
+*.prof
+*.log
+*.tmp
+*.bak
+*.go.[0-9]*
+
+# Local runtime state and generated artifacts
+apply_runs/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.out
+dist/
+build/
+coverage/
+
+# Python/local tooling leftovers
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.cache/
+*.egg-info/
+
+# Ad hoc search/export output
+exports/
+results.json
+*_matches.json
+
+# Git worktrees
+.worktrees/
+
+# Local runtime state (OAuth tokens, OTP locks, artifacts) — never commit
+.job-automator/
+
+# Generated analysis output — large and reproducible, not source.
+# docs/ is NOT ignored: it holds design specs and plans, which are source.
+github-artifacts/
+reports/
+
+# Scratch job lists written while probing (probe-jobs.json, run4-jobs.json...)
+*-jobs.json
+probe*.json
+
+# Replay corpus: captured from your own runs -- your answers, your resume and
+# the employers' pages. Local only; the README stays.
+tests/recovery_replay/*
+!tests/recovery_replay/README.md

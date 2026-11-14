@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Headings differ by weight and size, not by family. */
+  h1, h2, h3 {
+    letter-spacing: -0.015em;
+    font-weight: 600;
+  }
+}
+
+body {
+  margin: 0;
+  background: #0f1319;
+  font-family: 'IBM Plex Sans', 'Segoe UI Variable', system-ui, sans-serif;
+  letter-spacing: -0.003em;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(255, 178, 36, 0.35);
+  color: #0f1319;
+}
+
+/* Focus is the one place the signal colour appears outside a needs-you card:
+   it answers the same question -- where am I, what will act. */
+:focus-visible {
+  outline: 2px solid rgba(255, 178, 36, 0.8);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* The ambient radial glow and the 32px grid overlay were removed here. Both
+   were decoration carrying no information, and the glow was a gradient wash --
+   a stock generated-design default. The console's ground is flat on purpose:
+   nothing competes with a card that needs attention. */
+
+/* Ensure app content sits above pseudo-elements */
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* Thin custom scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* Modal entrance — scale-in used by all overlay panels */
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.modal-in { animation: modalIn 120ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .modal-in { animation: none; }
+}
+
+/* Reduced motion: clamp every CSS animation/transition app-wide.
+   framer-motion (MotionConfig reducedMotion="user"), AmbientField and
+   TickerNumber each handle this themselves — this covers Tailwind's
+   animate-bounce/pulse/indeterminate utilities. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

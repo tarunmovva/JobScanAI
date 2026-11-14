@@ -1,0 +1,52 @@
+appId: com.jobscan.ai
+productName: JobScan AI
+copyright: Copyright © 2026
+
+directories:
+  output: dist-package
+  buildResources: build-assets
+
+files:
+  - out/**/*
+  - package.json
+
+# Bundle resources/ directly into process.resourcesPath (no subdirectory nesting)
+extraResources:
+  - from: resources/
+    to: .
+    filter:
+      - "**/*"
+      - "!**/.gitkeep"
+
+# No native node modules: nothing to rebuild for Electron.
+npmRebuild: false
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+  icon: build-assets/icon.png
+  category: public.app-category.productivity
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build-assets/icon.png
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  runAfterFinish: true
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications

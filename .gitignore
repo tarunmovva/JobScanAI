@@ -1,0 +1,2 @@
+# Shared caches at the repo root. Each project keeps its own .gitignore.
+.cache/

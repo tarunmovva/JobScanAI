@@ -1,0 +1,18 @@
+node_modules/
+dist/
+dist-electron/
+out/
+.DS_Store
+
+# Bundled platform binaries — populated by scripts/build-go|python
+resources/bin/
+resources/python/
+resources/python-src/
+!resources/**/.gitkeep
+dist-package/
+
+# Playwright test outputs
+playwright-report/
+test-results/
+tests/screenshots/
+.scratch/

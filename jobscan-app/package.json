@@ -1,0 +1,57 @@
+{
+  "name": "jobscan-app",
+  "version": "0.0.1",
+  "description": "JobScan AI - Electron desktop job application assistant",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "out/main/main.js",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "predev": "node scripts/setup.mjs --quiet",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "test:e2e": "npm run build && playwright test",
+    "typecheck": "tsc --build tsconfig.json --force",
+    "test:unit": "npm run typecheck && tsc electron/agent-loop.ts electron/board-state.ts electron/applied-jobs.ts electron/record-files.ts electron/field-summary.ts electron/job-context-sql.ts electron/payload-builder.ts electron/needs-you.ts electron/chrome-tabs.ts electron/query-flags.ts electron/tab-stages.ts electron/interrupted-run.ts electron/record-header.ts electron/store-cache.ts electron/loop-policy.ts electron/run-mode.ts electron/proc.ts electron/queue-sql.ts electron/board-tags.ts electron/pool.ts electron/search-output.ts electron/agent-result.ts electron/codex-account.ts electron/loop-runner.ts electron/selection.ts electron/loop-copy.ts electron/store-sidecars.ts electron/app-paths.ts electron/codex-platform.ts electron/quit-guard.ts electron/codex-requests.ts electron/codex-health.ts electron/codex-probe.ts electron/binary-warmup.ts --module commonjs --target es2020 --moduleResolution node --outDir out/unit --skipLibCheck --esModuleInterop && node --test \"tests/unit/**/*.test.cjs\""
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@playwright/test": "^1.60.0",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.185.1",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.5.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "playwright": "^1.60.0",
+    "postcss": "^8.5.14",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.1"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@fontsource/instrument-sans": "^5.2.8",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/source-serif-4": "^5.2.9",
+    "@fontsource/space-grotesk": "^5.2.10",
+    "@openai/codex": "^0.153.4",
+    "electron-store": "^8.2.0",
+    "framer-motion": "^12.42.2",
+    "lucide-react": "^0.400.0",
+    "pdf-parse": "^1.1.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.185.1"
+  }
+}

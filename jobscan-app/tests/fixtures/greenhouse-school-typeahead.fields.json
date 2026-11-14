@@ -1,0 +1,972 @@
+{
+  "_source": "a live Greenhouse form, trimmed to the three dropdowns that exercise every branch",
+  "platform": "greenhouse",
+  "fields": [
+    {
+      "id": "country",
+      "name": "",
+      "label": "Country",
+      "type": "dropdown",
+      "required": true,
+      "selector": "#country",
+      "options": [
+        {
+          "text": "United States +1",
+          "value": "United States +1"
+        },
+        {
+          "text": "Afghanistan +93",
+          "value": "Afghanistan +93"
+        },
+        {
+          "text": "Åland Islands +358",
+          "value": "Åland Islands +358"
+        },
+        {
+          "text": "Albania +355",
+          "value": "Albania +355"
+        },
+        {
+          "text": "Algeria +213",
+          "value": "Algeria +213"
+        },
+        {
+          "text": "American Samoa +1",
+          "value": "American Samoa +1"
+        },
+        {
+          "text": "Andorra +376",
+          "value": "Andorra +376"
+        },
+        {
+          "text": "Angola +244",
+          "value": "Angola +244"
+        },
+        {
+          "text": "Anguilla +1",
+          "value": "Anguilla +1"
+        },
+        {
+          "text": "Antigua & Barbuda +1",
+          "value": "Antigua & Barbuda +1"
+        },
+        {
+          "text": "Argentina +54",
+          "value": "Argentina +54"
+        },
+        {
+          "text": "Armenia +374",
+          "value": "Armenia +374"
+        },
+        {
+          "text": "Aruba +297",
+          "value": "Aruba +297"
+        },
+        {
+          "text": "Ascension Island +247",
+          "value": "Ascension Island +247"
+        },
+        {
+          "text": "Australia +61",
+          "value": "Australia +61"
+        },
+        {
+          "text": "Austria +43",
+          "value": "Austria +43"
+        },
+        {
+          "text": "Azerbaijan +994",
+          "value": "Azerbaijan +994"
+        },
+        {
+          "text": "Bahamas +1",
+          "value": "Bahamas +1"
+        },
+        {
+          "text": "Bahrain +973",
+          "value": "Bahrain +973"
+        },
+        {
+          "text": "Bangladesh +880",
+          "value": "Bangladesh +880"
+        },
+        {
+          "text": "Barbados +1",
+          "value": "Barbados +1"
+        },
+        {
+          "text": "Belarus +375",
+          "value": "Belarus +375"
+        },
+        {
+          "text": "Belgium +32",
+          "value": "Belgium +32"
+        },
+        {
+          "text": "Belize +501",
+          "value": "Belize +501"
+        },
+        {
+          "text": "Benin +229",
+          "value": "Benin +229"
+        },
+        {
+          "text": "Bermuda +1",
+          "value": "Bermuda +1"
+        },
+        {
+          "text": "Bhutan +975",
+          "value": "Bhutan +975"
+        },
+        {
+          "text": "Bolivia +591",
+          "value": "Bolivia +591"
+        },
+        {
+          "text": "Bosnia & Herzegovina +387",
+          "value": "Bosnia & Herzegovina +387"
+        },
+        {
+          "text": "Botswana +267",
+          "value": "Botswana +267"
+        },
+        {
+          "text": "Brazil +55",
+          "value": "Brazil +55"
+        },
+        {
+          "text": "British Indian Ocean Territory +246",
+          "value": "British Indian Ocean Territory +246"
+        },
+        {
+          "text": "British Virgin Islands +1",
+          "value": "British Virgin Islands +1"
+        },
+        {
+          "text": "Brunei +673",
+          "value": "Brunei +673"
+        },
+        {
+          "text": "Bulgaria +359",
+          "value": "Bulgaria +359"
+        },
+        {
+          "text": "Burkina Faso +226",
+          "value": "Burkina Faso +226"
+        },
+        {
+          "text": "Burundi +257",
+          "value": "Burundi +257"
+        },
+        {
+          "text": "Cambodia +855",
+          "value": "Cambodia +855"
+        },
+        {
+          "text": "Cameroon +237",
+          "value": "Cameroon +237"
+        },
+        {
+          "text": "Canada +1",
+          "value": "Canada +1"
+        },
+        {
+          "text": "Cape Verde +238",
+          "value": "Cape Verde +238"
+        },
+        {
+          "text": "Caribbean Netherlands +599",
+          "value": "Caribbean Netherlands +599"
+        },
+        {
+          "text": "Cayman Islands +1",
+          "value": "Cayman Islands +1"
+        },
+        {
+          "text": "Central African Republic +236",
+          "value": "Central African Republic +236"
+        },
+        {
+          "text": "Chad +235",
+          "value": "Chad +235"
+        },
+        {
+          "text": "Chile +56",
+          "value": "Chile +56"
+        },
+        {
+          "text": "China +86",
+          "value": "China +86"
+        },
+        {
+          "text": "Christmas Island +61",
+          "value": "Christmas Island +61"
+        },
+        {
+          "text": "Cocos (Keeling) Islands +61",
+          "value": "Cocos (Keeling) Islands +61"
+        },
+        {
+          "text": "Colombia +57",
+          "value": "Colombia +57"
+        },
+        {
+          "text": "Comoros +269",
+          "value": "Comoros +269"
+        },
+        {
+          "text": "Congo - Brazzaville +242",
+          "value": "Congo - Brazzaville +242"
+        },
+        {
+          "text": "Congo - Kinshasa +243",
+          "value": "Congo - Kinshasa +243"
+        },
+        {
+          "text": "Cook Islands +682",
+          "value": "Cook Islands +682"
+        },
+        {
+          "text": "Costa Rica +506",
+          "value": "Costa Rica +506"
+        },
+        {
+          "text": "Côte d’Ivoire +225",
+          "value": "Côte d’Ivoire +225"
+        },
+        {
+          "text": "Croatia +385",
+          "value": "Croatia +385"
+        },
+        {
+          "text": "Cuba +53",
+          "value": "Cuba +53"
+        },
+        {
+          "text": "Curaçao +599",
+          "value": "Curaçao +599"
+        },
+        {
+          "text": "Cyprus +357",
+          "value": "Cyprus +357"
+        },
+        {
+          "text": "Czechia +420",
+          "value": "Czechia +420"
+        },
+        {
+          "text": "Denmark +45",
+          "value": "Denmark +45"
+        },
+        {
+          "text": "Djibouti +253",
+          "value": "Djibouti +253"
+        },
+        {
+          "text": "Dominica +1",
+          "value": "Dominica +1"
+        },
+        {
+          "text": "Dominican Republic +1",
+          "value": "Dominican Republic +1"
+        },
+        {
+          "text": "Ecuador +593",
+          "value": "Ecuador +593"
+        },
+        {
+          "text": "Egypt +20",
+          "value": "Egypt +20"
+        },
+        {
+          "text": "El Salvador +503",
+          "value": "El Salvador +503"
+        },
+        {
+          "text": "Equatorial Guinea +240",
+          "value": "Equatorial Guinea +240"
+        },
+        {
+          "text": "Eritrea +291",
+          "value": "Eritrea +291"
+        },
+        {
+          "text": "Estonia +372",
+          "value": "Estonia +372"
+        },
+        {
+          "text": "Eswatini +268",
+          "value": "Eswatini +268"
+        },
+        {
+          "text": "Ethiopia +251",
+          "value": "Ethiopia +251"
+        },
+        {
+          "text": "Falkland Islands +500",
+          "value": "Falkland Islands +500"
+        },
+        {
+          "text": "Faroe Islands +298",
+          "value": "Faroe Islands +298"
+        },
+        {
+          "text": "Fiji +679",
+          "value": "Fiji +679"
+        },
+        {
+          "text": "Finland +358",
+          "value": "Finland +358"
+        },
+        {
+          "text": "France +33",
+          "value": "France +33"
+        },
+        {
+          "text": "French Guiana +594",
+          "value": "French Guiana +594"
+        },
+        {
+          "text": "French Polynesia +689",
+          "value": "French Polynesia +689"
+        }
+      ],
+      "supports_custom_input": false,
+      "options_note": "Select from the available options.",
+      "options_truncated": true
+    },
+    {
+      "id": "school--0",
+      "name": "",
+      "label": "School",
+      "type": "dropdown",
+      "required": true,
+      "selector": "#school--0",
+      "options": [
+        {
+          "text": "Aalborg University",
+          "value": "Aalborg University"
+        },
+        {
+          "text": "Aalto University",
+          "value": "Aalto University"
+        },
+        {
+          "text": "Aarhus University",
+          "value": "Aarhus University"
+        },
+        {
+          "text": "Abertay University",
+          "value": "Abertay University"
+        },
+        {
+          "text": "Aberystwyth University",
+          "value": "Aberystwyth University"
+        },
+        {
+          "text": "Abilene Christian University",
+          "value": "Abilene Christian University"
+        },
+        {
+          "text": "Abo Akademi University",
+          "value": "Abo Akademi University"
+        },
+        {
+          "text": "Abraham Baldwin Agricultural College",
+          "value": "Abraham Baldwin Agricultural College"
+        },
+        {
+          "text": "Abu Dhabi University",
+          "value": "Abu Dhabi University"
+        },
+        {
+          "text": "Academy of Art University",
+          "value": "Academy of Art University"
+        },
+        {
+          "text": "Acadia University",
+          "value": "Acadia University"
+        },
+        {
+          "text": "Acharya Nagarjuna University",
+          "value": "Acharya Nagarjuna University"
+        },
+        {
+          "text": "Acupuncture and Integrative Medicine College - Berkeley",
+          "value": "Acupuncture and Integrative Medicine College - Berkeley"
+        },
+        {
+          "text": "Adams State University",
+          "value": "Adams State University"
+        },
+        {
+          "text": "Adelphi University",
+          "value": "Adelphi University"
+        },
+        {
+          "text": "Adrian College",
+          "value": "Adrian College"
+        },
+        {
+          "text": "Adventist University of Health Sciences",
+          "value": "Adventist University of Health Sciences"
+        },
+        {
+          "text": "Agnes Scott College",
+          "value": "Agnes Scott College"
+        },
+        {
+          "text": "AIB College of Business",
+          "value": "AIB College of Business"
+        },
+        {
+          "text": "Ain Shams University",
+          "value": "Ain Shams University"
+        },
+        {
+          "text": "Airlangga University",
+          "value": "Airlangga University"
+        },
+        {
+          "text": "Ajou University",
+          "value": "Ajou University"
+        },
+        {
+          "text": "Alabama A&M University",
+          "value": "Alabama A&M University"
+        },
+        {
+          "text": "Alabama State University",
+          "value": "Alabama State University"
+        },
+        {
+          "text": "Alaska Pacific University",
+          "value": "Alaska Pacific University"
+        },
+        {
+          "text": "Al Azhar University",
+          "value": "Al Azhar University"
+        },
+        {
+          "text": "Albany College of Pharmacy and Health Sciences",
+          "value": "Albany College of Pharmacy and Health Sciences"
+        },
+        {
+          "text": "Albany State University",
+          "value": "Albany State University"
+        },
+        {
+          "text": "Albertus Magnus College",
+          "value": "Albertus Magnus College"
+        },
+        {
+          "text": "Albion College",
+          "value": "Albion College"
+        },
+        {
+          "text": "Albright College",
+          "value": "Albright College"
+        },
+        {
+          "text": "Alcorn State University",
+          "value": "Alcorn State University"
+        },
+        {
+          "text": "Alderson Broaddus University",
+          "value": "Alderson Broaddus University"
+        },
+        {
+          "text": "Alexandria University",
+          "value": "Alexandria University"
+        },
+        {
+          "text": "Alexandru Ioan Cuza University",
+          "value": "Alexandru Ioan Cuza University"
+        },
+        {
+          "text": "Al-Farabi Kazakh National University",
+          "value": "Al-Farabi Kazakh National University"
+        },
+        {
+          "text": "Alfred University",
+          "value": "Alfred University"
+        },
+        {
+          "text": "Alice Lloyd College",
+          "value": "Alice Lloyd College"
+        },
+        {
+          "text": "Al-Imam Mohamed Ibn Saud Islamic University",
+          "value": "Al-Imam Mohamed Ibn Saud Islamic University"
+        },
+        {
+          "text": "Allegheny College",
+          "value": "Allegheny College"
+        },
+        {
+          "text": "Allen College",
+          "value": "Allen College"
+        },
+        {
+          "text": "Allen University",
+          "value": "Allen University"
+        },
+        {
+          "text": "Alliant International University",
+          "value": "Alliant International University"
+        },
+        {
+          "text": "Alma College",
+          "value": "Alma College"
+        },
+        {
+          "text": "Alpen-Adria-Universität Klagenfurt",
+          "value": "Alpen-Adria-Universität Klagenfurt"
+        },
+        {
+          "text": "Alvernia University",
+          "value": "Alvernia University"
+        },
+        {
+          "text": "Alverno College",
+          "value": "Alverno College"
+        },
+        {
+          "text": "Amberton University",
+          "value": "Amberton University"
+        },
+        {
+          "text": "American Academy of Art",
+          "value": "American Academy of Art"
+        },
+        {
+          "text": "American Indian College of the Assemblies of God",
+          "value": "American Indian College of the Assemblies of God"
+        },
+        {
+          "text": "American InterContinental University",
+          "value": "American InterContinental University"
+        },
+        {
+          "text": "American International College",
+          "value": "American International College"
+        },
+        {
+          "text": "American Jewish University",
+          "value": "American Jewish University"
+        },
+        {
+          "text": "American Public University System",
+          "value": "American Public University System"
+        },
+        {
+          "text": "American University",
+          "value": "American University"
+        },
+        {
+          "text": "American University in Bulgaria",
+          "value": "American University in Bulgaria"
+        },
+        {
+          "text": "American University in Cairo",
+          "value": "American University in Cairo"
+        },
+        {
+          "text": "American University of Beirut",
+          "value": "American University of Beirut"
+        },
+        {
+          "text": "American University of Beirut (AUB)",
+          "value": "American University of Beirut (AUB)"
+        },
+        {
+          "text": "American University of Paris",
+          "value": "American University of Paris"
+        },
+        {
+          "text": "American University of Puerto Rico",
+          "value": "American University of Puerto Rico"
+        },
+        {
+          "text": "American University of Sharjah (AUS)",
+          "value": "American University of Sharjah (AUS)"
+        },
+        {
+          "text": "Amherst College",
+          "value": "Amherst College"
+        },
+        {
+          "text": "Amridge University",
+          "value": "Amridge University"
+        },
+        {
+          "text": "Anderson University",
+          "value": "Anderson University"
+        },
+        {
+          "text": "Andrews University",
+          "value": "Andrews University"
+        },
+        {
+          "text": "Angelo State University",
+          "value": "Angelo State University"
+        },
+        {
+          "text": "Anna Maria College",
+          "value": "Anna Maria College"
+        },
+        {
+          "text": "Antioch University",
+          "value": "Antioch University"
+        },
+        {
+          "text": "Aoyama Gakuin University",
+          "value": "Aoyama Gakuin University"
+        },
+        {
+          "text": "Appalachian Bible College",
+          "value": "Appalachian Bible College"
+        },
+        {
+          "text": "Appalachian State University",
+          "value": "Appalachian State University"
+        },
+        {
+          "text": "Aquinas College",
+          "value": "Aquinas College"
+        },
+        {
+          "text": "Arcadia University",
+          "value": "Arcadia University"
+        },
+        {
+          "text": "Argosy University",
+          "value": "Argosy University"
+        },
+        {
+          "text": "Aristotle University of Thessaloniki",
+          "value": "Aristotle University of Thessaloniki"
+        },
+        {
+          "text": "Arizona Christian University",
+          "value": "Arizona Christian University"
+        },
+        {
+          "text": "Arizona State University",
+          "value": "Arizona State University"
+        },
+        {
+          "text": "Arizona State University - West",
+          "value": "Arizona State University - West"
+        },
+        {
+          "text": "Arkansas Baptist College",
+          "value": "Arkansas Baptist College"
+        }
+      ],
+      "supports_custom_input": false,
+      "options_note": "Select from the available options.",
+      "options_truncated": true
+    },
+    {
+      "id": "discipline--0",
+      "name": "",
+      "label": "Discipline",
+      "type": "dropdown",
+      "required": false,
+      "selector": "#discipline--0",
+      "options": [
+        {
+          "text": "Accounting",
+          "value": "Accounting"
+        },
+        {
+          "text": "African Studies",
+          "value": "African Studies"
+        },
+        {
+          "text": "Agriculture",
+          "value": "Agriculture"
+        },
+        {
+          "text": "Anthropology",
+          "value": "Anthropology"
+        },
+        {
+          "text": "Applied Health Services",
+          "value": "Applied Health Services"
+        },
+        {
+          "text": "Architecture",
+          "value": "Architecture"
+        },
+        {
+          "text": "Art",
+          "value": "Art"
+        },
+        {
+          "text": "Asian Studies",
+          "value": "Asian Studies"
+        },
+        {
+          "text": "Biology",
+          "value": "Biology"
+        },
+        {
+          "text": "Business",
+          "value": "Business"
+        },
+        {
+          "text": "Business Administration",
+          "value": "Business Administration"
+        },
+        {
+          "text": "Chemistry",
+          "value": "Chemistry"
+        },
+        {
+          "text": "Classical Languages",
+          "value": "Classical Languages"
+        },
+        {
+          "text": "Communications & Film",
+          "value": "Communications & Film"
+        },
+        {
+          "text": "Computer Science",
+          "value": "Computer Science"
+        },
+        {
+          "text": "Dentistry",
+          "value": "Dentistry"
+        },
+        {
+          "text": "Developing Nations",
+          "value": "Developing Nations"
+        },
+        {
+          "text": "Discipline Unknown",
+          "value": "Discipline Unknown"
+        },
+        {
+          "text": "Earth Sciences",
+          "value": "Earth Sciences"
+        },
+        {
+          "text": "Economics",
+          "value": "Economics"
+        },
+        {
+          "text": "Education",
+          "value": "Education"
+        },
+        {
+          "text": "Electronics",
+          "value": "Electronics"
+        },
+        {
+          "text": "Engineering",
+          "value": "Engineering"
+        },
+        {
+          "text": "English Studies",
+          "value": "English Studies"
+        },
+        {
+          "text": "Environmental Studies",
+          "value": "Environmental Studies"
+        },
+        {
+          "text": "European Studies",
+          "value": "European Studies"
+        },
+        {
+          "text": "Fashion",
+          "value": "Fashion"
+        },
+        {
+          "text": "Finance",
+          "value": "Finance"
+        },
+        {
+          "text": "Fine Arts",
+          "value": "Fine Arts"
+        },
+        {
+          "text": "General Studies",
+          "value": "General Studies"
+        },
+        {
+          "text": "Health Services",
+          "value": "Health Services"
+        },
+        {
+          "text": "History",
+          "value": "History"
+        },
+        {
+          "text": "Humanities",
+          "value": "Humanities"
+        },
+        {
+          "text": "Human Resources Management",
+          "value": "Human Resources Management"
+        },
+        {
+          "text": "Industrial Arts & Carpentry",
+          "value": "Industrial Arts & Carpentry"
+        },
+        {
+          "text": "Information Systems",
+          "value": "Information Systems"
+        },
+        {
+          "text": "International Relations",
+          "value": "International Relations"
+        },
+        {
+          "text": "Journalism",
+          "value": "Journalism"
+        },
+        {
+          "text": "Languages",
+          "value": "Languages"
+        },
+        {
+          "text": "Latin American Studies",
+          "value": "Latin American Studies"
+        },
+        {
+          "text": "Law",
+          "value": "Law"
+        },
+        {
+          "text": "Linguistics",
+          "value": "Linguistics"
+        },
+        {
+          "text": "Manufacturing & Mechanics",
+          "value": "Manufacturing & Mechanics"
+        },
+        {
+          "text": "Mathematics",
+          "value": "Mathematics"
+        },
+        {
+          "text": "Medicine",
+          "value": "Medicine"
+        },
+        {
+          "text": "Middle Eastern Studies",
+          "value": "Middle Eastern Studies"
+        },
+        {
+          "text": "Naval Science",
+          "value": "Naval Science"
+        },
+        {
+          "text": "North American Studies",
+          "value": "North American Studies"
+        },
+        {
+          "text": "Nuclear Technics",
+          "value": "Nuclear Technics"
+        },
+        {
+          "text": "Operations Research & Strategy",
+          "value": "Operations Research & Strategy"
+        },
+        {
+          "text": "Organizational Theory",
+          "value": "Organizational Theory"
+        },
+        {
+          "text": "Other",
+          "value": "Other"
+        },
+        {
+          "text": "Philosophy",
+          "value": "Philosophy"
+        },
+        {
+          "text": "Physical Education",
+          "value": "Physical Education"
+        },
+        {
+          "text": "Physical Sciences",
+          "value": "Physical Sciences"
+        },
+        {
+          "text": "Physics",
+          "value": "Physics"
+        },
+        {
+          "text": "Political Science",
+          "value": "Political Science"
+        },
+        {
+          "text": "Psychology",
+          "value": "Psychology"
+        },
+        {
+          "text": "Public Policy",
+          "value": "Public Policy"
+        },
+        {
+          "text": "Public Service",
+          "value": "Public Service"
+        },
+        {
+          "text": "Religious Studies",
+          "value": "Religious Studies"
+        },
+        {
+          "text": "Russian & Soviet Studies",
+          "value": "Russian & Soviet Studies"
+        },
+        {
+          "text": "Scandinavian Studies",
+          "value": "Scandinavian Studies"
+        },
+        {
+          "text": "Science",
+          "value": "Science"
+        },
+        {
+          "text": "Slavic Studies",
+          "value": "Slavic Studies"
+        },
+        {
+          "text": "Social Science",
+          "value": "Social Science"
+        },
+        {
+          "text": "Social Sciences",
+          "value": "Social Sciences"
+        },
+        {
+          "text": "Sociology",
+          "value": "Sociology"
+        },
+        {
+          "text": "Speech",
+          "value": "Speech"
+        },
+        {
+          "text": "Statistics & Decision Theory",
+          "value": "Statistics & Decision Theory"
+        },
+        {
+          "text": "Urban Studies",
+          "value": "Urban Studies"
+        },
+        {
+          "text": "Veterinary Medicine",
+          "value": "Veterinary Medicine"
+        }
+      ],
+      "supports_custom_input": false,
+      "options_note": "Select from the available options."
+    }
+  ]
+}

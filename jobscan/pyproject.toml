@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job-application-automator"
+version = "1.6.1"
+description = "Standalone Ashby, Lever, and Greenhouse job application form extractors and fillers"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    {name = "JobScan AI contributors"},
+]
+keywords = [
+    "job-application",
+    "form-extraction",
+    "form-filling",
+    "playwright",
+    "web-automation",
+    "ashby",
+    "lever",
+    "greenhouse",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business",
+    "Topic :: Internet :: WWW/HTTP :: Browsers",
+]
+dependencies = [
+    "playwright>=1.40.0",
+    "PyPDF2>=3.0.0",
+    "fpdf2>=2.7.0",
+]
+
+[project.optional-dependencies]
+gmail-otp = [
+    "google-api-python-client>=2.0.0",
+    "google-auth-oauthlib>=1.0.0",
+]
+
+[tool.setuptools]
+packages = ["job_application_automator"]
+
+# The recovery agent's procedure ships as markdown next to the code. Without this
+# a wheel install drops it and every recovery silently falls back to the in-code
+# literal (recorded as skill_rev="fallback").
+[tool.setuptools.package-data]
+job_application_automator = ["skills/**/*.md"]

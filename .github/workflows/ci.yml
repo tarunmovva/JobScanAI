@@ -1,0 +1,74 @@
+# Build and test on Windows and macOS on every push and pull request.
+#
+# macOS is not developed on day to day, so this is where its code paths --
+# the jobscan build, the Python venv, the process-group kills -- are proven.
+# Its end-to-end run is informational until it has passed once.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: jobscan/go.mod
+          cache-dependency-path: jobscan/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: jobscan-app/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: jobscan CLI -- build and test
+        working-directory: jobscan
+        run: |
+          go build ./...
+          go test ./...
+
+      - name: Install the app's dependencies
+        working-directory: jobscan-app
+        run: npm ci
+
+      - name: npm run setup -- build the CLI, make the Python environment
+        working-directory: jobscan-app
+        run: npm run setup
+
+      - name: App unit tests
+        working-directory: jobscan-app
+        run: npm run test:unit
+
+      - name: Python tests
+        working-directory: jobscan
+        shell: bash
+        run: |
+          PY=.venv/bin/python3
+          [ -x "$PY" ] || PY=.venv/Scripts/python.exe
+          "$PY" -m pip install --disable-pip-version-check pytest
+          "$PY" -m playwright install chromium-headless-shell
+          "$PY" -m pytest -q tests
+
+      - name: End-to-end tests (Electron + Playwright)
+        working-directory: jobscan-app
+        run: npm run test:e2e
+        continue-on-error: ${{ matrix.os == 'macos-latest' }}
