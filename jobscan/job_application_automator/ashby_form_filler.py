@@ -25,6 +25,7 @@ try:
     from job_application_automator import tab_tag
     from job_application_automator.answer_values import truthy
     from job_application_automator.cover_letter import inject_cover_letter
+    from job_application_automator import upload_guard
     from job_application_automator.submission_signals import (
         accepted_by_network, apply_recovery, attach_response_recorder, posting_gone,
         settle_submission)
@@ -38,6 +39,7 @@ except ImportError:
     import tab_tag  # type: ignore
     from answer_values import truthy
     from cover_letter import inject_cover_letter
+    import upload_guard  # type: ignore
     from submission_signals import (
         accepted_by_network, apply_recovery, attach_response_recorder, posting_gone,
         settle_submission)
@@ -105,6 +107,8 @@ async def _fill_inner(payload_path: Path, output_dir: Path) -> dict:
     # injection installs a new dict when the payload had none, so binding
     # afterwards always names the dict that actually got filled.
     _cover_fields = inject_cover_letter(payload, output_dir)
+    # Uploads only the résumé or files written for this job (upload_guard).
+    upload_guard.configure(payload, (payload_path.parent, output_dir))
     answers: dict = payload.get("answers", {})
 
     result = {
@@ -951,6 +955,9 @@ async def _fill_file(page: Page, field_id: str, value: str, selector: str) -> tu
     path = Path(value)
     if not path.exists():
         return False, f"file not found: {value}"
+    refused = upload_guard.refusal(path)
+    if refused:
+        return False, refused
     for sel in [
         selector,
         f'input[name="{field_id}"]',

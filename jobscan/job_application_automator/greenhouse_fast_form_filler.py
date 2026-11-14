@@ -31,6 +31,7 @@ try:
     from job_application_automator.runtime_support import submit_enabled
     from job_application_automator.answer_values import truthy
     from job_application_automator.cover_letter import inject_cover_letter
+    from job_application_automator import upload_guard
     from job_application_automator.submission_signals import accepted_by_network, apply_recovery, attach_response_recorder
     from job_application_automator.submission_signals import settle_submission, UNSETTLED_STATUSES
     from job_application_automator.submission_signals import confirmation_text, confirmation_url
@@ -51,6 +52,7 @@ except ImportError:
     from runtime_support import submit_enabled
     from answer_values import truthy
     from cover_letter import inject_cover_letter
+    import upload_guard  # type: ignore
     from submission_signals import accepted_by_network, apply_recovery, attach_response_recorder
     from submission_signals import settle_submission, UNSETTLED_STATUSES
     from submission_signals import confirmation_text, confirmation_url
@@ -514,6 +516,8 @@ class GreenhouseFastFormFiller:
         # fresh dict -- inject afterwards and the letter lands somewhere the
         # fill loop never reads.
         self._cover_fields = inject_cover_letter(payload, output_dir)
+        # Uploads only the résumé or files written for this job (upload_guard).
+        upload_guard.configure(payload, (payload_path.parent if payload_path else output_dir, output_dir))
         answers = extract_answers(payload)
         self._otp_hints = self._otp_hints_from_payload(payload)
         apply_url = str(payload.get("original_url") or payload.get("apply_url") or payload.get("url") or "")
@@ -1331,6 +1335,9 @@ class GreenhouseFastFormFiller:
         file_path = Path(str(answer)).expanduser()
         if not file_path.exists():
             return False, f"file not found: {file_path}"
+        refused = upload_guard.refusal(file_path)
+        if refused:
+            return False, refused
         locator = await self._locator_for_field(target, field, controls)
         if locator is None:
             return False, "file control not found"

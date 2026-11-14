@@ -406,6 +406,13 @@ def _build_codex_argv(
             "--tab-id", str(form_tools.get("tab_id") or ""),
             "--cdp-url", str(form_tools.get("cdp_url") or "http://127.0.0.1:9222"),
         ]
+        if form_tools.get("upload_resume") is not None:
+            # Same upload rule as the fillers (upload_guard): the résumé, or
+            # files written into this job's own folder -- nothing else.
+            ft_args += [
+                "--upload-resume", str(form_tools.get("upload_resume") or ""),
+                "--upload-root", str(form_tools.get("upload_root") or ""),
+            ]
         argv += [
             "-c", f"mcp_servers.formtools.command={json.dumps(sys.executable or 'python')}",
             "-c", f"mcp_servers.formtools.args={_toml_str_array(ft_args)}",
@@ -831,6 +838,9 @@ async def attempt_recovery(
                 "cdp_url": os.environ.get("JOB_AUTOMATOR_CDP_URL", "http://127.0.0.1:9222"),
                 "pkg_root": str(Path(__file__).resolve().parent.parent),
             }
+            if "resume_path" in payload:
+                form_tools["upload_resume"] = str(payload.get("resume_path") or "")
+                form_tools["upload_root"] = str(output_dir)
 
         argv = _build_codex_argv(output_dir, use_otp_lock, form_tools)
         if argv is None:
