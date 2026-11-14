@@ -320,6 +320,10 @@ test.describe('App settings & profiles', () => {
     })
     const { app, page } = await launchApp()
     try {
+      // Boot sends a machine with no Codex sign-in (CI) to the auth screen,
+      // which hides the profile chip; the profiles above were seeded before
+      // launch so boot sees them, the screen is set after.
+      await seedAndReload(page, { appState: 'resume' })
       await page.locator('header').getByRole('button', { name: /Alpha/ }).click()
       await page.getByRole('button', { name: /Beta/ }).click()
       await expect(page.getByText(/saved data is missing/)).toBeVisible({ timeout: 5000 })
