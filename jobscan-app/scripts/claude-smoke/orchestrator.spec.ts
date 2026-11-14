@@ -24,7 +24,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import http from 'http'
-import { endRun } from './teardown'
+import { endRun, killTree, removeScratch } from './teardown'
 
 const APP_ROOT = path.resolve(__dirname, '..', '..')
 const REPO = path.resolve(APP_ROOT, '..')
@@ -197,7 +197,8 @@ test('a real Claude Code session drives JobScan; the app answers forms with Clau
     report['payloads'] = payloads
     expect(payloads.some(p => p.payload && Number(p.answers) > 0), 'at least one form answered').toBe(true)
   } finally {
-    try { orchestrator?.kill() } catch { /* gone */ }
+    // The whole tree: the plugin's MCP server runs under claude.exe.
+    killTree(orchestrator?.pid)
     const lines = appLogs.join('').split(/\r?\n/)
     const byKind: Record<string, { calls: number; ok: number; ms: number; tokensIn: number; tokensOut: number }> = {}
     for (const l of lines) {
@@ -213,6 +214,6 @@ test('a real Claude Code session drives JobScan; the app answers forms with Clau
     console.log('\n===== ORCHESTRATOR REPORT =====\n' + JSON.stringify(report, null, 2))
     // The scratch Chrome on 9223 (extraction started one) goes before the app.
     console.log(`app ${await endRun(app, root)}`)
-    if (process.env['SMOKE_KEEP'] !== '1') fs.rmSync(root, { recursive: true, force: true })
+    if (process.env['SMOKE_KEEP'] !== '1') removeScratch(root)
   }
 })

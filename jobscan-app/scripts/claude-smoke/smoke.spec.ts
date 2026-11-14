@@ -25,7 +25,7 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { endRun } from './teardown'
+import { endRun, removeScratch } from './teardown'
 
 const APP_ROOT = path.resolve(__dirname, '..', '..')
 const REPO = path.resolve(APP_ROOT, '..')
@@ -167,6 +167,6 @@ test('Claude Code writes the searches and rates the jobs', async () => {
     fs.writeFileSync(path.join(s.root, 'report.json'), JSON.stringify(report, null, 2))
     console.log('\n===== SMOKE REPORT =====\n' + JSON.stringify(report, null, 2))
     console.log(`app ${await endRun(app, s.root)}`)
-    if (process.env['SMOKE_KEEP'] !== '1') fs.rmSync(s.root, { recursive: true, force: true })
+    if (process.env['SMOKE_KEEP'] !== '1') removeScratch(s.root)
   }
 })
