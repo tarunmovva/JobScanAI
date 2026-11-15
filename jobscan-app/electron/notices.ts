@@ -69,6 +69,10 @@ export function noticesFromEvent(channel: string, payload: unknown): NoticeInput
     case 'pipeline:idle': return [['idle', {}]]
     case 'pipeline:canceled': return [['canceled', {}]]
     case 'pipeline:error': return [['error', {}]]
+    // A rebuild's boards fetched so far; the index steps after it have no count.
+    case 'fetch:progress': return p['phase'] === 'fetch'
+      ? [['progress', { step: 'rebuild', done: num(p['companiesDone']), total: num(p['companiesTotal']) }]]
+      : []
     case 'fetch:done': return [['rebuild_done', {
       result: p['success'] === true ? 'success' : 'failed',
       jobs_added: num(p['jobsAdded']), board_errors: num(p['errorCount']), seconds: num(p['elapsedSec']),

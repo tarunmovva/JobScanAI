@@ -34,6 +34,7 @@ test('no notice ever carries a title, company, URL, description, query or error 
     ['queryGen:error', { index: 1, error: EMPLOYER[3] }],
     ['loop:status', { phase: 'running', round: 3, stage: 'apply', waitReason: '', today: { attempted: 4, limit: 25 },
       excluded: [{ key: 'lever:1', reason: EMPLOYER[3], title: EMPLOYER[0], company: EMPLOYER[1] }], stopReason: EMPLOYER[3] }],
+    ['fetch:progress', { status: 'running', phase: 'fetch', companiesDone: 120, companiesTotal: 13692, jobsSoFar: 900, errorMessage: EMPLOYER[3] }],
     ['fetch:done', { success: true, jobsAdded: 812, errorCount: 0, elapsedSec: 14, errorMessage: EMPLOYER[3] }],
     ['pipeline:error', EMPLOYER[3]],
     ['queryGen:streaming', { index: 0, text: EMPLOYER[3] }],
@@ -45,6 +46,15 @@ test('no notice ever carries a title, company, URL, description, query or error 
   const text = JSON.stringify(feed.since(0).notices)
   for (const s of [...EMPLOYER, 'lever:1', '--title-query']) assert.ok(!text.includes(s), `leaked: ${s}`)
   assert.ok(feed.since(0).notices.length >= 8)
+})
+
+test('a rebuild is heard as boards fetched so far, and only while it fetches', () => {
+  assert.deepEqual(noticesFromEvent('fetch:progress', { status: 'running', phase: 'fetch', companiesDone: 1487, companiesTotal: 13692, jobsSoFar: 17378 }),
+    [['progress', { step: 'rebuild', done: 1487, total: 13692 }]])
+  assert.deepEqual(noticesFromEvent('fetch:progress', { status: 'running', phase: 'index', companiesDone: 13692, companiesTotal: 13692 }), [])
+  const feed = new NoticeFeed(500, () => 1e9, 30_000)
+  for (let i = 1; i <= 5; i++) for (const n of noticesFromEvent('fetch:progress', { phase: 'fetch', companiesDone: i * 100, companiesTotal: 13692 })) feed.add(n)
+  assert.equal(feed.since(0).notices.filter(n => n.type === 'progress').length, 1, 'coalesced like any progress')
 })
 
 test('a click in the window is heard as its action name only; unknown names are dropped', () => {

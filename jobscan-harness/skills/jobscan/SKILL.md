@@ -41,7 +41,7 @@ The notices:
 | `rebuild_done` | `result`, `jobs_added`, `board_errors`, `seconds` | the job database rebuild finished |
 | `search_written`, `search_retry`, `search_failed` | `index` | Find Jobs wrote, retried, or gave up on search number `index` |
 | `searches_done` | `searches`, `pool` | the searches are done; `pool` is how many jobs they found |
-| `progress` | `step`, `done`, `total` (for `step=apply`, counts per outcome) | progress, at most every 30 s per step |
+| `progress` | `step`, `done`, `total` (for `step=apply`, counts per outcome) | progress, at most every 30 s per step. `step` is `rebuild` (job boards fetched), `rating`, `extract` or `apply` |
 | `rating_done` | `rated` | rating finished |
 | `extract_done` | `done`, `failed` | reading the selected postings finished |
 | `loop` | `phase`, `round`, `stage`, `wait`, `applied_today`, `daily_limit` | the auto-apply loop changed |

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ipc } from '../ipc'
 
 interface Note { text: string; at: string; from: 'agent' | 'app' }
@@ -13,7 +14,9 @@ interface HarnessStatus { enabled: boolean; connected: boolean; notes: Note[] }
 export default function AgentChip() {
   const [status, setStatus] = useState<HarnessStatus | null>(null)
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let alive = true
@@ -31,10 +34,31 @@ export default function AgentChip() {
 
   useEffect(() => {
     if (!open) return
-    const close = (e: MouseEvent): void => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const close = (e: MouseEvent): void => {
+      const t = e.target as Node
+      if (ref.current?.contains(t) || panelRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') setOpen(false) }
+    const onResize = (): void => setOpen(false)
     window.addEventListener('mousedown', close)
-    return () => window.removeEventListener('mousedown', close)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('mousedown', close)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', onResize)
+    }
   }, [open])
+
+  // The header is overflow-hidden and has a backdrop-filter, which clips
+  // anything drawn inside it, even position:fixed. The notes go on <body>,
+  // placed under the chip (the profile menu does the same).
+  const toggle = (): void => {
+    const rect = ref.current?.getBoundingClientRect()
+    if (rect) setPos({ top: rect.bottom + 8, right: Math.max(8, window.innerWidth - rect.right) })
+    setOpen(o => !o)
+  }
 
   if (!status?.enabled) return null
   const label = status.connected ? 'Agent connected' : 'Waiting for your agent'
@@ -42,7 +66,7 @@ export default function AgentChip() {
     <div ref={ref} className="relative shrink-0">
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         aria-expanded={open}
         aria-label={`${label}. Show its notes`}
         className={[
@@ -55,8 +79,12 @@ export default function AgentChip() {
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${status.connected ? 'bg-orange-400' : 'bg-gray-500'}`} aria-hidden />
         <span className="truncate">{label}</span>
       </button>
-      {open && (
-        <div className="absolute right-0 mt-2 w-80 max-h-80 overflow-auto rounded-xl border border-white/[0.08] bg-[rgba(38,38,36,0.98)] p-3 shadow-xl z-50">
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          style={{ top: pos.top, right: pos.right }}
+          className="fixed w-80 max-w-[calc(100vw-16px)] max-h-80 overflow-auto rounded-xl border border-white/[0.08] bg-[rgba(38,38,36,0.98)] p-3 shadow-xl z-50"
+        >
           <p className="text-xs text-gray-500 mb-2">
             {status.connected
               ? 'A Claude Code or Codex session is driving JobScan. It can start a rebuild, find jobs, rate them and stop the loop. It cannot apply or change settings.'
@@ -74,7 +102,8 @@ export default function AgentChip() {
               ))}
             </ul>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
