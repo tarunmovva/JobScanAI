@@ -77,7 +77,8 @@ No API key and no per-token bill. Search runs on your machine and costs no AI ti
 - **Google Chrome**: the filler drives your own Chrome. Set `JOB_AUTOMATOR_CHROME_PATH` if Chrome is not in the usual place.
 - **An AI engine, either one:**
   - **Codex CLI** with a ChatGPT account that has Codex access: `npm install -g @openai/codex`. You sign in from inside the app.
-  - **Claude Code**, installed and signed in once (`claude`, then `/login`). Choose it on the sign-in screen or in Settings.
+  - **Claude Code** with a paid Claude plan that includes it (the free plan doesn't). Install it with `curl -fsSL https://claude.ai/install.sh | bash` (macOS, Linux) or `irm https://claude.ai/install.ps1 | iex` (Windows PowerShell); other ways are in [Anthropic's install guide](https://code.claude.com/docs/en/setup). Then run `claude` once and sign in in the browser. Choose it on JobScan's sign-in screen or in Settings.
+
   Searches, ratings and answers use that account's usage.
 
 ### Run it
@@ -107,7 +108,24 @@ Each step is skipped when it is already up to date, so later starts are quick. R
 
 ### Set it up with Claude Code or Codex
 
-Open Claude Code (`claude`) or Codex (`codex`) in the cloned folder and ask it to set JobScan up. [AGENTS.md](AGENTS.md) (which `CLAUDE.md` points to) gives it the steps: check the requirements, run the setup, start the app with nothing submitted, and install the jobscan plugin if you want it. It does not apply to jobs, and it does not read your job database or application records.
+Your coding agent can do the setup for you. It follows [AGENTS.md](AGENTS.md), which Claude Code reads through `CLAUDE.md`:
+
+1. Install Claude Code or Codex (see [Requirements](#requirements)) and sign in once: run `claude` and sign in in the browser, or run `codex` and sign in with ChatGPT.
+2. Clone the repository and start the agent in it:
+   ```bash
+   git clone https://github.com/tarunmovva/JobScanAI.git jobscan-ai
+   cd jobscan-ai
+   claude        # or: codex
+   ```
+3. Ask: *"Set up JobScan for me."* The agent:
+   - checks Node, Go, Python, Chrome and your AI engine, and tells you what's missing, with the link;
+   - runs `npm install` and `npm run setup` in `jobscan-app/`;
+   - starts the app with `JOB_AUTOMATOR_SUBMIT=0`, so nothing is ever submitted.
+
+   It asks before it runs commands or installs anything; Codex may also ask to allow network access for the downloads. If it can't open the app's window, run `npm run dev` yourself in `jobscan-app/`.
+4. Optional: ask it to install the jobscan plugin so the session can drive the app ([section 13](#13-let-claude-code-or-codex-drive-jobscan)). The plugin loads in the next session you start.
+
+The agent never applies to jobs, and it doesn't read your job database or application records.
 
 ### Try it without sending anything
 
@@ -629,7 +647,7 @@ codex plugin add jobscan@jobscan
 
 From a local clone, give its folder instead of `tarunmovva/JobScanAI`.
 
-Then type `/jobscan:jobscan` in Claude Code, or `$jobscan:jobscan` in Codex, followed by what you want ("rebuild the database and find me remote Rust roles"). The session can do six things, each only where and when its button in the window works: **rebuild the job database**, **cancel a rebuild**, **find jobs**, **find more** ("remote Rust roles"), **rate the jobs**, and **stop the loop**. It hears every step, its progress (boards fetched, jobs rated), every click you make in the window and every AI call as short notices (Claude Code through the plugin's feed, Codex by waiting for them), and it can leave notes for you.
+Then, in a new session, type `/jobscan:jobscan` in Claude Code, or `$jobscan:jobscan` in Codex, followed by what you want ("rebuild the database and find me remote Rust roles"). The session can do six things, each only where and when its button in the window works: **rebuild the job database**, **cancel a rebuild**, **find jobs**, **find more** ("remote Rust roles"), **rate the jobs**, and **stop the loop**. It hears every step, its progress (boards fetched, jobs rated), every click you make in the window and every AI call as short notices (Claude Code through the plugin's feed, Codex by waiting for them), and it can leave notes for you.
 
 <img src="docs/screenshots/15-agent-chip.png" alt="The header chip reading 'Agent connected', open on the notes a Claude Code session left while it rebuilt the database and found jobs" width="100%">
 

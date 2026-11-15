@@ -55,6 +55,8 @@ If you run JobScan with `JOBSCAN_USER_DATA_DIR`, start Claude Code or Codex with
 
 ## Start
 
+Start a new session after installing: a plugin loads when a session starts.
+
 - **Claude Code:** run `/jobscan:jobscan`. You can add a request after it, as in `/jobscan:jobscan find me remote Rust roles`.
 - **Codex:** type `$jobscan:jobscan` (or pick **jobscan:jobscan** from the `$` list), followed by what you want, as in `$jobscan:jobscan find me remote Rust roles`.
 

@@ -20,7 +20,7 @@ JobScan is a desktop app (`jobscan-app/`, Electron + React). It searches about 1
    - Python 3.10+ (`python --version` or `python3 --version`): https://www.python.org/downloads/
    - Google Chrome
    - An AI engine, either one:
-     - Claude Code, signed in: `claude auth status`. If it isn't, the user runs `claude` and types `/login`.
+     - Claude Code, signed in: `claude auth status`. If it isn't, the user runs `claude` and types `/login`. It needs a paid Claude plan that includes Claude Code; install guide: https://code.claude.com/docs/en/setup
      - The Codex CLI: `codex --version`, installed with `npm install -g @openai/codex`. The user signs in from JobScan (**Login with ChatGPT**) or with `codex login`.
 2. **Install and set up** (both need network access):
    ```bash
