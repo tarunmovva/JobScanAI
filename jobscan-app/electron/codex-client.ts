@@ -603,6 +603,9 @@ export async function probeCodexModelIds(timeoutMs = 30_000): Promise<string[] |
     const send = (message: Record<string, unknown>): void => {
       try { child.stdin?.write(JSON.stringify({ jsonrpc: '2.0', ...message }) + '\n') } catch { done(null) }
     }
+    // A Codex that exits at once makes the write fail asynchronously (EPIPE):
+    // that is "cannot tell", never an uncaught error in the main process.
+    child.stdin?.on('error', () => done(null))
     readline.createInterface({ input: child.stdout!, crlfDelay: Infinity }).on('line', line => {
       let msg: Record<string, unknown>
       try { msg = JSON.parse(line) as Record<string, unknown> } catch { return }
