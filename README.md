@@ -57,7 +57,7 @@ No API key and no per-token bill. Search runs on your machine and costs no AI ti
   - [1. Sign in](#1-sign-in) · [2. Resume & Profile](#2-resume--profile) · [3. Email for one-time codes](#3-email-for-one-time-codes-otp)
   - [4. Rebuild the job database](#4-rebuild-the-job-database) · [5. Find Jobs](#5-find-jobs-how-searches-are-written-and-run) · [6. Rating](#6-rating-how-every-job-is-scored)
   - [7. Applications](#7-applications-how-a-form-gets-filled-and-submitted) · [8. One-time codes, end to end](#8-one-time-codes-end-to-end) · [9. The repair agent](#9-the-repair-agent)
-  - [10. Done & history](#10-done-history-and-application-records) · [11. Settings](#11-settings) · [12. Loop mode](#12-loop-mode) · [13. Let Claude Code drive JobScan](#13-let-claude-code-drive-jobscan)
+  - [10. Done & history](#10-done-history-and-application-records) · [11. Settings](#11-settings) · [12. Loop mode](#12-loop-mode) · [13. Let Claude Code or Codex drive JobScan](#13-let-claude-code-or-codex-drive-jobscan)
 - [Built to save cost](#-built-to-save-cost)
 - [Built not to lose work](#-built-not-to-lose-work)
 - [The `jobscan` CLI](#the-jobscan-cli)
@@ -82,7 +82,7 @@ No API key and no per-token bill. Search runs on your machine and costs no AI ti
 ### Run it
 
 ```bash
-git clone <this repository's URL> jobscan-ai
+git clone https://github.com/tarunmovva/JobScanAI.git jobscan-ai
 cd jobscan-ai/jobscan-app
 npm install
 npm run dev
@@ -102,6 +102,11 @@ Each step is skipped when it is already up to date, so later starts are quick. R
 2. **Add your resume and profile.** That means target locations, work authorization, and the answers application forms ask for. The target location decides which markets the searches cover.
 3. **Find jobs.** The first database build downloads postings from about 13,700 public job boards into `jobscan/jobs.db`. It takes a while, and the database grows to a few GB.
 4. **Rate, pick and apply.** The app opens Chrome with its own profile (remote debugging on port 9222) and fills each form. Applications that need a CAPTCHA solved or other human input are left for you.
+5. **Optional: let your Claude Code or Codex session drive it.** Turn on **Settings → Let Claude Code or Codex drive JobScan**, install the jobscan plugin once, and ask the session to rebuild, find or rate jobs while you watch ([section 13](#13-let-claude-code-or-codex-drive-jobscan)). Applying always stays in the window.
+
+### Set it up with Claude Code or Codex
+
+Open Claude Code (`claude`) or Codex (`codex`) in the cloned folder and ask it to set JobScan up. [AGENTS.md](AGENTS.md) (which `CLAUDE.md` points to) gives it the steps: check the requirements, run the setup, start the app with nothing submitted, and install the jobscan plugin if you want it. It does not apply to jobs, and it does not read your job database or application records.
 
 ### Try it without sending anything
 
@@ -541,7 +546,7 @@ The Done screen sorts the run into **Submitted**, **Needs you** (with **Finish i
 | **Codex Model** | With Codex: **Auto (Codex default)** or any model your Codex sign-in offers. The list comes from the Codex CLI itself. Changing the model **invalidates cached queries, ratings and answers**, so the next run really uses the new model. The change applies from the next turn, without restarting Codex. |
 | **AI engine** | **ChatGPT (Codex)** or **Your Claude Code**. Switching is refused while anything runs or the loop is on. Switching engines re-runs cached searches and ratings with the new engine. |
 | **Claude model** | With Claude Code: its default, or `sonnet`, `opus`, `haiku` or any model id your Claude Code accepts. Part of the cache keys, like the Codex model. |
-| **Let Claude Code drive JobScan** | Lets a Claude Code session with the jobscan plugin start the safe steps and hear what happens ([section 13](#13-let-claude-code-drive-jobscan)). Off by default. |
+| **Let Claude Code or Codex drive JobScan** | Lets a Claude Code or Codex session with the jobscan plugin start the safe steps and hear what happens ([section 13](#13-let-claude-code-or-codex-drive-jobscan)). Off by default. |
 | **Rating Agents** | Rating batches running at once (default **5**). Changes speed, not results, so it isn't part of any cache key. |
 | **Payload Agents** | Application agents running at once (default **6**; loop runs use at most 5. [Why](#7-applications-how-a-form-gets-filled-and-submitted)). |
 | **OTP Email (IMAP)** | Shows the connected mailbox. **Reconfigure →** to change it. |
@@ -602,15 +607,22 @@ The panel also shows **today's count**, **Codex usage** (5-hour and weekly windo
 
 ---
 
-### 13. Let Claude Code drive JobScan
+### 13. Let Claude Code or Codex drive JobScan
 
-Turn on **Settings → Let Claude Code drive JobScan**, install the plugin once, and a Claude Code session can run JobScan for you while you talk to it:
+Turn on **Settings → Let Claude Code or Codex drive JobScan**, install the plugin once, and a Claude Code or Codex session can run JobScan for you while you talk to it:
 
 ```bash
-claude plugin install jobscan --marketplace tarunmovva/JobScanAI   # or a local clone: --marketplace /path/to/jobscan-ai
+# Claude Code
+claude plugin install jobscan --marketplace tarunmovva/JobScanAI
+
+# Codex
+codex plugin marketplace add tarunmovva/JobScanAI
+codex plugin add jobscan@jobscan
 ```
 
-Then type `/jobscan:jobscan` in Claude Code. The session can do six things, each only where and when its button in the window works: **rebuild the job database**, **cancel a rebuild**, **find jobs**, **find more** ("remote Rust roles"), **rate the jobs**, and **stop the loop**. It hears every step, every click you make in the window and every AI call as short notices, and it can leave notes that appear in a chip in JobScan's header.
+From a local clone, give its folder instead of `tarunmovva/JobScanAI`.
+
+Then type `/jobscan:jobscan` in Claude Code, or `$jobscan:jobscan` in Codex. The session can do six things, each only where and when its button in the window works: **rebuild the job database**, **cancel a rebuild**, **find jobs**, **find more** ("remote Rust roles"), **rate the jobs**, and **stop the loop**. It hears every step, every click you make in the window and every AI call as short notices (Claude Code through the plugin's feed, Codex by waiting for them), and it can leave notes that appear in a chip in JobScan's header.
 
 What it can't do is the point:
 
@@ -726,7 +738,7 @@ JOBSCAN_USER_DATA_DIR=~/jobscan-test npm run dev
 | `JOB_AUTOMATOR_RECOVERY_TIMEOUT` | seconds per repair attempt (default 720) |
 | `JOB_AUTOMATOR_OTP_TIMEOUT_SECONDS` | how long to wait for an emailed code (default 120) |
 | `JOBSCAN_CODEX_BIN` | the Codex CLI to run, when it isn't found on its own (Settings has the same) |
-| `JOBSCAN_HARNESS_FILE` | for the jobscan plugin: the `harness.json` to use instead of the app's data folder |
+| `JOBSCAN_HARNESS_FILE` | for the jobscan plugin (Claude Code or Codex): the `harness.json` to use instead of the app's data folder. Set it when the app runs with `JOBSCAN_USER_DATA_DIR` |
 
 Set a variable in the terminal you start the app from, then run `npm run dev` in that same terminal:
 
@@ -795,7 +807,9 @@ jobscan-ai/
 │   ├── electron/                    pipeline, rating engine, loop conductor & policy, AI engines (Codex, Claude Code), harness
 │   ├── src/                         screens and components
 │   └── tests/                       unit (node --test) and e2e (Playwright)
-└── jobscan-harness/                 Claude Code plugin: drive JobScan from a Claude Code session
+├── jobscan-harness/                 Claude Code and Codex plugin: drive JobScan from a session
+├── .claude-plugin/, .agents/        the plugin's marketplaces (Claude Code, Codex)
+└── AGENTS.md, CLAUDE.md             setup steps for a Claude Code or Codex session opened here
 ```
 
 ### Status
