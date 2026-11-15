@@ -57,6 +57,17 @@ test('a rebuild is heard as boards fetched so far, and only while it fetches', (
   assert.equal(feed.since(0).notices.filter(n => n.type === 'progress').length, 1, 'coalesced like any progress')
 })
 
+test('the same progress twice is heard once; after the step ends it is heard again', () => {
+  const feed = new NoticeFeed(500, () => 1e9, 30_000)
+  const done = () => noticesFromEvent('fetch:progress', { phase: 'fetch', companiesDone: 13692, companiesTotal: 13692 })
+  for (const n of done()) feed.add(n)
+  for (const n of done()) feed.add(n)
+  assert.equal(feed.since(0).notices.filter(n => n.type === 'progress').length, 1)
+  feed.add(['idle', {}])
+  for (const n of done()) feed.add(n)
+  assert.equal(feed.since(0).notices.filter(n => n.type === 'progress').length, 2, 'a second rebuild is heard')
+})
+
 test('a click in the window is heard as its action name only; unknown names are dropped', () => {
   assert.deepEqual(noticesFromEvent('user_action', { action: 'selection:confirm', jobIds: ['lever:1'] }),
     [['user_action', { action: 'selection:confirm' }]])

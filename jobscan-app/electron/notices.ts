@@ -119,6 +119,7 @@ export class NoticeFeed {
   private lastLoop = ''
   private progressAt = new Map<string, number>()
   private pendingProgress = new Map<string, Record<string, unknown>>()
+  private sentProgress = new Map<string, string>()   // per step, the last progress sent
   private tallies = new Map<string, Map<string, number>>()
   private tallyAt = new Map<string, number>()
   /** When the driving agent last asked for notices (its presence). */
@@ -169,15 +170,23 @@ export class NoticeFeed {
 
   private progress(fields: Record<string, unknown>): void {
     const step = String(fields['step'] ?? '')
+    if (this.sentProgress.get(step) === JSON.stringify(fields)) return   // nothing new
     const finished = typeof fields['done'] === 'number' && fields['done'] === fields['total']
     const last = this.progressAt.get(step)
     if (finished || last === undefined || this.now() - last >= this.everyMs) {
       this.progressAt.set(step, this.now())
       this.pendingProgress.delete(step)
-      this.push('progress', fields)
+      this.pushProgress(step, fields)
     } else {
       this.pendingProgress.set(step, fields)
     }
+  }
+
+  private pushProgress(step: string, fields: Record<string, unknown>): void {
+    const key = JSON.stringify(fields)
+    if (this.sentProgress.get(step) === key) return
+    this.sentProgress.set(step, key)
+    this.push('progress', fields)
   }
 
   private tally(fields: Record<string, unknown>): void {
@@ -199,8 +208,9 @@ export class NoticeFeed {
   }
 
   private flushAll(): void {
-    for (const [step, fields] of this.pendingProgress) { this.progressAt.set(step, this.now()); this.push('progress', fields) }
+    for (const [step, fields] of this.pendingProgress) { this.progressAt.set(step, this.now()); this.pushProgress(step, fields) }
     this.pendingProgress.clear()
+    this.sentProgress.clear()   // the step ended: the next run starts fresh
     for (const step of this.tallies.keys()) this.flushTally(step)
   }
 }
