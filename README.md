@@ -790,9 +790,6 @@ A variable set this way lasts until that terminal is closed. To clear it sooner:
 cd jobscan-app
 npm run test:unit      # typecheck + unit tests
 npm run test:e2e       # builds, then drives the app with Playwright (in its own Electron profile)
-# Real runs with your own Claude Code (they spend your plan; never in CI):
-npx playwright test --config scripts/claude-smoke/playwright.config.ts smoke          # searches + ratings
-npx playwright test --config scripts/claude-smoke/playwright.config.ts orchestrator   # a Claude Code session drives it
 
 cd ../jobscan
 go test ./...

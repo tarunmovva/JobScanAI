@@ -62,5 +62,4 @@ While driving, use only the four jobscan tools for anything to do with JobScan. 
 
 - Tests, from `jobscan-app/`: `npm run test:unit` (typecheck and unit tests) and `npm run test:e2e` (builds, then drives the app with Playwright on its own profile). From `jobscan/`: `go test ./...`, plus pytest in `jobscan/.venv` (README, "Tests").
 - Never start the app against the user's real data while you test. Set `JOBSCAN_USER_DATA_DIR` to a scratch folder, set `JOB_AUTOMATOR_SUBMIT=0`, and set `JOB_AUTOMATOR_CDP_PORT` and `JOB_AUTOMATOR_CDP_URL` to a free port. The user's own JobScan Chrome may be on 9222.
-- The real-run scripts in `jobscan-app/scripts/claude-smoke/` spend the user's Claude plan. Run them only when asked.
-- Layout and design: the README ("How it's built", "Repository layout") and `docs/claude-engine/`.
+- Layout and design: the README ("How it's built", "Repository layout").
