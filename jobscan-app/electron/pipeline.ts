@@ -10,25 +10,28 @@ import {
   cliSubmit, getDbPath, cliDbQuery, automatorPython,
 } from './cli-runner'
 import {
-  runCodexThread, parseJsonResponse, clearCodexClient,
+  parseJsonResponse,
   QUERY_GEN_SYSTEM, QUERY_GEN_DONE_ACK, QUERY_GEN_PROMPT_REV,
   RATING_SYSTEM, RATING_PROMPT_REV, RATING_DESCRIPTION_CHARS, payloadSystem, PAYLOAD_PROMPT_REV,
 } from './codex-client'
 import { buildAndWritePayload } from './payload-builder'
+import { aiEngine } from './ai-engine'
+import { noticeEvent } from './notice-hub'
 import {
   wasInterrupted, abandonSql, landingState, RUN_STATE_KEYS,
 } from './interrupted-run'
-import { jobContextSql, jobContextFromRows } from './job-context-sql'
+import { jobContextSql, jobContextFromRows, retryQuickFailures } from './job-context-sql'
 import { appliedKeys, isApplied, jobKey } from './applied-jobs'
 import { applyBoardEvent, seedCards, emptyBoard, waitingCards, cardsNotStarted, type Board, type JobRef } from './board-state'
 import { shouldAgentExit, AGENT_POLL_MS } from './agent-loop'
 import { summarizeFieldsForPrompt } from './field-summary'
 import { needsYouReason } from './needs-you'
-import { tokenizeQueryFlags } from './query-flags'
+import { tokenizeQueryFlags, searchFlagProblem } from './query-flags'
 import { recordHeader } from './record-header'
 import { killTree, collectChild, treeSpawnOptions, stopGently } from './proc'
 import { resetSelectedSql, markSkippedSql, abandonOthersSql } from './queue-sql'
 import { closeTabsFor } from './chrome-tabs'
+import { cdpVersionUrl, chromeLaunchArgs } from './cdp'
 import { getRunHooks, type HookJob, type HookResult, type HookView } from './run-mode'
 import {
   carryForward, fingerprintMatches, ratingHealth, FILLER_TIMEOUT_MS, MIXED_FINGERPRINT,
@@ -73,10 +76,10 @@ export async function cancelActivePipeline(reason = 'user-back-nav'): Promise<vo
   t.reason = reason
   for (const c of t.children) { killTree(c) }
   push('pipeline:canceled', { reason })
-  // Await codex shutdown so the next runCodexThread cannot race a still-alive
-  // codex.exe holding the SQLite WAL — otherwise we hit SQLITE_BUSY and the
-  // "Codex RPC timeout: initialize" bug returns under fast back→forward.
-  try { await clearCodexClient() } catch { /* best effort */ }
+  // Await the engine's shutdown so the next AI call cannot race it. For
+  // Codex: a still-alive codex.exe holding the SQLite WAL hits SQLITE_BUSY
+  // and the "Codex RPC timeout: initialize" bug returns under fast back→forward.
+  await aiEngine().cancelAll(reason)
 }
 
 async function withToken<T>(fn: (t: CancelToken) => Promise<T>): Promise<T | void> {
@@ -105,7 +108,7 @@ function checkpoint(t: CancelToken): void {
 
 function isChromeRunning(): Promise<boolean> {
   return new Promise(resolve => {
-    const req = http.get('http://127.0.0.1:9222/json/version', res => {
+    const req = http.get(cdpVersionUrl(), res => {
       resolve(res.statusCode === 200)
     })
     req.on('error', () => resolve(false))
@@ -117,12 +120,7 @@ async function ensureChrome(): Promise<void> {
   if (await isChromeRunning()) return
 
   const profileDir = store.get('jobAutomatorHome') as string
-  const chromeArgs = [
-    '--remote-debugging-port=9222',
-    `--user-data-dir=${path.join(profileDir, 'chrome-cdp-profile')}`,
-    '--no-first-run',
-    '--no-default-browser-check',
-  ]
+  const chromeArgs = chromeLaunchArgs(profileDir)
 
   const chromePaths = [
     // Windows
@@ -190,6 +188,8 @@ function push(channel: string, data: unknown): void {
 
 /** To the window only, without touching the board. */
 export function send(channel: string, data: unknown): void {
+  // To the harness first: it hears events even with no window open.
+  noticeEvent(channel, data)
   // Guard against the window being destroyed mid-shutdown — child process
   // close handlers fire AFTER before-quit closes the BrowserWindow, so naive
   // `_win?.webContents.send(...)` throws "Object has been destroyed" in main.
@@ -268,7 +268,8 @@ function getProfileForHash(): string {
 // re-runs on the new model instead of replaying old-model results.
 // (search/extract are CLI-only — no model in their hashes.)
 function codexModelForHash(): string {
-  return String(store.get('codexModel') ?? '')
+  // Codex: the raw codexModel setting, exactly as before (ai-engine.ts).
+  return aiEngine().hashModel()
 }
 
 export function queryGenHash(): string {
@@ -509,9 +510,12 @@ async function generateAndSearch(
     let streaming = ''
     let raw = ''
     try {
-      raw = await runCodexThread(QUERY_GEN_SYSTEM, userMsg, (tok) => {
-        streaming += tok
-        push('queryGen:streaming', { index: idx, text: streaming })
+      raw = await aiEngine().complete({
+        kind: 'query_gen', system: QUERY_GEN_SYSTEM, user: userMsg, owner: t,
+        onToken: (tok) => {
+          streaming += tok
+          push('queryGen:streaming', { index: idx, text: streaming })
+        },
       })
     } catch (e) {
       if (t.canceled) throw new Error('__canceled__')
@@ -809,6 +813,9 @@ async function validateQueryFlags(
   t?: CancelToken
 ): Promise<{ error: string | null; count: number | null }> {
   const tokens = tokenizeQueryFlags(flags)
+  // Same retry path as a flag the CLI rejects: the model is told why.
+  const unsafe = searchFlagProblem(tokens)
+  if (unsafe) return { error: unsafe, count: null }
   try {
     const { stdout, stderr, exitCode } = await runCli(['search', ...tokens, '--count'], undefined, t)
     if (exitCode !== 0 && stderr.trim()) return { error: stderr.trim().slice(0, 120), count: null }
@@ -963,8 +970,10 @@ export function ratingEngineCancel(): void {
   e.canceled = true
   e.queue.length = 0
   e.active = false
-  // In-flight codex turns die via clearCodexClient in cancelActivePipeline;
-  // their rejections are swallowed per-batch. Nothing is persisted.
+  // canceled is set first, so a batch that settles now saves nothing. Then
+  // the engine ends this owner's calls (Codex: a no-op; its turns die via
+  // cancelAll in cancelActivePipeline). Rejections are swallowed per-batch.
+  try { aiEngine().cancelOwner(e) } catch { /* no engine registered */ }
   for (const r of e.settledResolvers.splice(0)) r()
 }
 
@@ -1010,7 +1019,7 @@ async function ratingEngineBatch(e: RatingEngine, batch: Job[]): Promise<void> {
       description: (j.description ?? '').slice(0, RATING_DESCRIPTION_CHARS),
     }))
     const userMsg = `${e.profileBlock}RESUME:\n${e.resumeText}\n\nJOBS:\n${JSON.stringify(jobSummaries, null, 2)}`
-    const raw = await runCodexThread(RATING_SYSTEM, userMsg)
+    const raw = await aiEngine().complete({ kind: 'rating', system: RATING_SYSTEM, user: userMsg, owner: e })
     if (e.canceled) return
     const ratings = parseJsonResponse<Array<{ job_id: string; platform: string; rating: number; reason: string }>>(raw) ?? []
 
@@ -1301,7 +1310,12 @@ async function getJobContext(jobId: string, platform: string): Promise<{ title: 
   try {
     // Asynchronous: this once ran as spawnSync per job, on the main process,
     // and the window could not draw a frame until the answer came.
-    const rows = await cliDbQuery(jobContextSql(jobId, platform), undefined, JOB_CONTEXT_TIMEOUT_MS)
+    // Retried after a quick failure: the board's other jobscan processes can
+    // hold the database for a moment (SQLITE_BUSY), and the CLI does not wait.
+    const rows = await retryQuickFailures(
+      () => cliDbQuery(jobContextSql(jobId, platform), undefined, JOB_CONTEXT_TIMEOUT_MS),
+      { attempts: 3, delayMs: 1_500, quickMs: 5_000 },
+    )
     if (rows === null) {
       // This returned empties for every job for the life of the feature,
       // because the SQL named a column the schema does not have. Nothing
@@ -1863,7 +1877,7 @@ async function runPayloadGenInner(t: CancelToken): Promise<void> {
         type PayloadReply = { answers: Record<string, string | string[]>; cover_letter?: string }
         const askPayload = async (): Promise<PayloadReply | null> =>
           parseJsonResponse<PayloadReply>(
-            await runCodexThread(payloadSystem(wantsCoverLetter), userMsg))
+            await aiEngine().complete({ kind: 'payload', system: payloadSystem(wantsCoverLetter), user: userMsg, owner: t }))
 
         let parsed = await askPayload()
         // A turn that yields NO answers has failed, not answered. One live run

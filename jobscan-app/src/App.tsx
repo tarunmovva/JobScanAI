@@ -5,6 +5,7 @@ import { ipc, LOOP_REFUSED_EVENT } from './ipc'
 import { profileDotColor } from './profileColor'
 import type { AppState, LoopStatus, ProfileInfo } from './types'
 import LoopChip from './components/LoopChip'
+import AgentChip from './components/AgentChip'
 import LoopPanel from './components/LoopPanel'
 import { LOOP_ON_MESSAGE } from '../electron/loop-copy'
 import AuthScreen from './screens/AuthScreen'
@@ -307,6 +308,7 @@ export default function App() {
         </div>
         <div className="flex items-center gap-3">
           {state !== 'auth' && <StateTrail current={state} counts={counts} onGo={goTo} locked={loopOn} />}
+          {state !== 'auth' && <AgentChip />}
           {state !== 'auth' && <LoopChip status={loopStatus} onOpen={() => setShowLoop(true)} />}
           <button
             onClick={() => setShowSettings(true)}

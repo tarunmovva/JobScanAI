@@ -7,8 +7,8 @@ const ALLOWED_INVOKE = new Set([
   'pipeline:start-extract', 'pipeline:start-payload-gen', 'pipeline:reset',
   'pipeline:goto-state',
   'selection:confirm',
-  'settings:get', 'settings:save', 'codex:list-models',
-  'codex:update-status', 'codex:check-update',
+  'settings:get', 'settings:save', 'codex:list-models', 'engine:set',
+  'harness:set', 'harness:get-status',
   'chrome:focus-tab',
   'imap:get-config', 'imap:save-config', 'imap:test-connection',
   'state:get', 'state:get-counts',
@@ -39,6 +39,7 @@ const ALLOWED_EVENTS = new Set([
   'error',
   'pipeline:error', 'pipeline:canceled', 'pipeline:idle',
   'loop:status',
+  'agent:note',
 ])
 
 // Store wrapper→original pairs so off() can remove the exact listener

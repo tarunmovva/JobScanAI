@@ -232,9 +232,9 @@ def _timeout_s() -> float:
 def _resolve_codex() -> list[str] | None:
     """Resolve codex into an argv prefix.
 
-    JOB_AUTOMATOR_CODEX_BIN wins when set: the app auto-updates the Codex CLI
-    into its own userData dir and passes the resolved path down, so recovery
-    runs on the SAME binary as the app-server side. Falling through to PATH
+    JOB_AUTOMATOR_CODEX_BIN wins when set: the app passes down the Codex it
+    runs itself (the user's own CLI, or a copy an earlier JobScan downloaded),
+    so recovery runs on the SAME binary as the app-server side. Falling through to PATH
     would silently split the two surfaces across versions — and a version skew
     only shows up when a fill fails, which is the worst time to discover it.
 
@@ -255,8 +255,10 @@ def _resolve_codex() -> list[str] | None:
 
     pkg = Path(found).parent / "node_modules" / "@openai" / "codex"
     if pkg.is_dir():
-        for exe in sorted(pkg.glob("node_modules/@openai/codex-*/vendor/*/codex/codex.exe")):
-            return [str(exe)]
+        # The binary moved from vendor/<triple>/codex/ to vendor/<triple>/bin/ in 0.153.
+        for sub in ("bin", "codex"):
+            for exe in sorted(pkg.glob(f"node_modules/@openai/codex-*/vendor/*/{sub}/codex.exe")):
+                return [str(exe)]
         cli = pkg / "bin" / "codex.js"
         node = shutil.which("node")
         if cli.exists() and node:
@@ -406,6 +408,13 @@ def _build_codex_argv(
             "--tab-id", str(form_tools.get("tab_id") or ""),
             "--cdp-url", str(form_tools.get("cdp_url") or "http://127.0.0.1:9222"),
         ]
+        if form_tools.get("upload_resume") is not None:
+            # Same upload rule as the fillers (upload_guard): the résumé, or
+            # files written into this job's own folder -- nothing else.
+            ft_args += [
+                "--upload-resume", str(form_tools.get("upload_resume") or ""),
+                "--upload-root", str(form_tools.get("upload_root") or ""),
+            ]
         argv += [
             "-c", f"mcp_servers.formtools.command={json.dumps(sys.executable or 'python')}",
             "-c", f"mcp_servers.formtools.args={_toml_str_array(ft_args)}",
@@ -831,6 +840,9 @@ async def attempt_recovery(
                 "cdp_url": os.environ.get("JOB_AUTOMATOR_CDP_URL", "http://127.0.0.1:9222"),
                 "pkg_root": str(Path(__file__).resolve().parent.parent),
             }
+            if "resume_path" in payload:
+                form_tools["upload_resume"] = str(payload.get("resume_path") or "")
+                form_tools["upload_root"] = str(output_dir)
 
         argv = _build_codex_argv(output_dir, use_otp_lock, form_tools)
         if argv is None:

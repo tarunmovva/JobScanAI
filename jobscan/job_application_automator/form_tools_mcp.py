@@ -43,9 +43,11 @@ from urllib.parse import urlparse
 try:
     from job_application_automator.submission_signals import confirmation_text, confirmation_url
     from job_application_automator.tab_tag import TAB_ID_PROP
+    from job_application_automator import upload_guard
 except ImportError:  # spawned with the package root on sys.path
     from submission_signals import confirmation_text, confirmation_url
     from tab_tag import TAB_ID_PROP
+    import upload_guard  # type: ignore
 
 PROTOCOL_VERSION = "2024-11-05"
 
@@ -504,6 +506,9 @@ class FormTools:
                     return "checked via label"
                 return "could not check"
             if typ == "file":
+                refused = upload_guard.refusal(value)
+                if refused:
+                    return refused
                 await loc.set_input_files(value, timeout=15000)
                 return "file set"
 
@@ -695,7 +700,12 @@ def main() -> None:
     parser.add_argument("--tab-marker", default="")
     parser.add_argument("--tab-id", default="")
     parser.add_argument("--payload", default="")
+    # Upload rule shared with the fillers (upload_guard). Absent: legacy runs.
+    parser.add_argument("--upload-resume", default=None)
+    parser.add_argument("--upload-root", default="")
     args = parser.parse_args()
+    if args.upload_resume is not None:
+        upload_guard.configure({"resume_path": args.upload_resume}, (args.upload_root,))
 
     asyncio.run(serve(FormTools(args.cdp_url, args.tab_marker, args.tab_id)))
 

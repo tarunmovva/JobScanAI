@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { AlertTriangle, Check } from 'lucide-react'
 import { ipc } from '../ipc'
 import { profileDotColor } from '../profileColor'
-import type { Settings, CodexModelOption, CodexUpdateStatus, ProfileInfo } from '../types'
+import type { Settings, CodexModelOption, ProfileInfo } from '../types'
 import AppliedJobsPanel from './AppliedJobsPanel'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -21,8 +21,9 @@ export default function SettingsPanel({ onClose }: Props) {
   const [imapInfo, setImapInfo] = useState<{ configured: boolean; host?: string; username?: string }>({ configured: false })
   const [models, setModels] = useState<CodexModelOption[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
-  const [codexUpdate, setCodexUpdate] = useState<CodexUpdateStatus | null>(null)
-  const [checkingCodex, setCheckingCodex] = useState(false)
+  const [engineMsg, setEngineMsg] = useState('')
+  const [harness, setHarness] = useState<{ enabled: boolean; connected: boolean }>({ enabled: false, connected: false })
+  const [harnessMsg, setHarnessMsg] = useState('')
   const [showHistory, setShowHistory] = useState(false)
   const [profiles, setProfiles] = useState<ProfileInfo[]>([])
   const [activeProfileId, setActiveProfileId] = useState('')
@@ -76,27 +77,60 @@ export default function SettingsPanel({ onClose }: Props) {
     loadProfiles()
   }
 
-  useEffect(() => {
-    ipc.invoke<Settings>('settings:get').then(setS)
-    ipc.invoke<{ configured: boolean; host?: string; username?: string }>('imap:get-config').then(setImapInfo)
-    loadProfiles()
-
-    let alive = true
-    ipc.invoke<CodexUpdateStatus>('codex:update-status')
-      .then(r => { if (alive) setCodexUpdate(r ?? null) })
-      .catch(() => { /* version line just stays hidden */ })
+  // Codex's model list and version: only while Codex is the engine (both
+  // start Codex, which Claude mode never does).
+  const aliveRef = useRef(true)
+  const loadCodexInfo = (): void => {
+    const alive = (): boolean => aliveRef.current
     ipc.invoke<{ models: CodexModelOption[]; error: string | null; clearedModel?: string }>('codex:list-models')
       .then(r => {
-        if (!alive) return
+        if (!alive()) return
         setModels(r?.models ?? [])
         setModelsLoaded(true)
         // The main process resets a saved model the API no longer offers —
         // mirror that here so the <select> doesn't keep showing the dead one.
         if (r?.clearedModel) setS(prev => ({ ...prev, codexModel: '' }))
       })
-      .catch(() => { if (alive) setModelsLoaded(true) })
-    return () => { alive = false }
+      .catch(() => { if (alive()) setModelsLoaded(true) })
+  }
+
+  useEffect(() => {
+    aliveRef.current = true
+    ipc.invoke<Settings>('settings:get').then(r => {
+      if (!aliveRef.current) return
+      setS(r)
+      if (r?.aiEngine !== 'claude') loadCodexInfo()
+    })
+    ipc.invoke<{ configured: boolean; host?: string; username?: string }>('imap:get-config').then(setImapInfo)
+    ipc.invoke<{ enabled: boolean; connected: boolean }>('harness:get-status')
+      .then(r => { if (aliveRef.current && r) setHarness({ enabled: r.enabled, connected: r.connected }) })
+      .catch(() => { /* switch shows off */ })
+    loadProfiles()
+    return () => { aliveRef.current = false }
   }, [])
+
+  const engine = s.aiEngine ?? 'codex'
+  const toggleHarness = async (enabled: boolean): Promise<void> => {
+    setHarnessMsg('')
+    const r = await ipc.invoke<{ ok: boolean; error?: string; enabled: boolean; connected: boolean }>('harness:set', { enabled })
+    if (!r?.ok) setHarnessMsg(r?.error ?? 'Could not change this right now.')
+    if (r) setHarness({ enabled: r.enabled, connected: r.connected })
+  }
+  const switchEngine = async (next: 'codex' | 'claude'): Promise<void> => {
+    if (next === engine) return
+    setEngineMsg('')
+    const r = await ipc.invoke<{ ok: boolean; error?: string; ready?: boolean; claudeFound?: boolean }>('engine:set', { engine: next })
+    if (!r?.ok) { setEngineMsg(r?.error ?? 'Could not switch right now.'); return }
+    setS(prev => ({ ...prev, aiEngine: next, ...(next === 'claude' ? { claudeFound: r.claudeFound } : {}) }))
+    if (next === 'claude') {
+      setEngineMsg(r.claudeFound === false
+        ? 'Claude Code was not found on this computer. Install it, or set its path under Paths.'
+        : r.ready ? 'Claude Code is signed in.' : 'Claude Code is not signed in: run claude in a terminal, then /login.')
+    } else {
+      setEngineMsg(r.ready ? '' : 'Codex is not signed in.')
+      loadCodexInfo()
+    }
+  }
 
   const save = async () => {
     await ipc.invoke('settings:save', s)
@@ -211,6 +245,54 @@ export default function SettingsPanel({ onClose }: Props) {
         <div className="flex flex-col gap-3">
           <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">AI Configuration</p>
           <div className="flex flex-col gap-1">
+            <label className="text-xs text-gray-400 font-medium">AI engine</label>
+            <div className="flex gap-2" role="group" aria-label="AI engine">
+              {(['codex', 'claude'] as const).map(id => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={engine === id}
+                  onClick={() => void switchEngine(id)}
+                  className={[
+                    'px-3 py-1.5 rounded-full text-sm border transition-colors',
+                    engine === id
+                      ? 'bg-orange-500/20 border-orange-500/50 text-orange-300'
+                      : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:bg-white/[0.08]',
+                  ].join(' ')}
+                >
+                  {id === 'codex' ? 'ChatGPT (Codex)' : 'Your Claude Code'}
+                </button>
+              ))}
+            </div>
+            {engineMsg && <p className="text-xs text-gray-400">{engineMsg}</p>}
+          </div>
+          {engine === 'claude' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-400 font-medium" htmlFor="claude-model">Claude model</label>
+              <input
+                id="claude-model"
+                list="claude-model-options"
+                value={String(s.claudeModel ?? '')}
+                placeholder="Default (Claude Code's own choice)"
+                onChange={e => setS(prev => ({ ...prev, claudeModel: e.target.value }))}
+                className="bg-[rgba(35,34,32,0.92)] border border-white/[0.08] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-500 placeholder-gray-600"
+              />
+              <datalist id="claude-model-options">
+                <option value="sonnet" />
+                <option value="opus" />
+                <option value="haiku" />
+              </datalist>
+              <p className="text-xs text-gray-500">
+                Each AI call runs your own Claude Code once, with no tools and none of your settings.
+                Form repair is off with this engine.
+              </p>
+              {s.claudeFound === false && (
+                <p className="text-xs text-amber-400">Claude Code was not found. Install it, or set its path under Paths.</p>
+              )}
+            </div>
+          )}
+          {engine !== 'claude' && (
+          <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-400 font-medium">Codex Model</label>
             <select
               value={storedModel}
@@ -230,38 +312,44 @@ export default function SettingsPanel({ onClose }: Props) {
                 Model list unavailable — is Codex signed in? Auto and your saved choice still work.
               </p>
             )}
-            {/* Which models appear above is decided by the Codex CLI, not by
-                this app — an out-of-date CLI cannot decode the current model
-                list and silently falls back to its own built-in one. */}
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-gray-500">
-                Codex CLI {codexUpdate?.managedVersion ?? 'bundled'}
-                {codexUpdate?.latestVersion && codexUpdate.latestVersion !== codexUpdate.managedVersion
-                  ? ` — ${codexUpdate.latestVersion} available`
-                  : ''}
-              </span>
-              <button
-                type="button"
-                disabled={checkingCodex}
-                onClick={async () => {
-                  setCheckingCodex(true)
-                  try {
-                    const r = await ipc.invoke<CodexUpdateStatus>('codex:check-update')
-                    setCodexUpdate(r ?? null)
-                    const list = await ipc.invoke<{ models: CodexModelOption[] }>('codex:list-models')
-                    setModels(list?.models ?? [])
-                  } finally { setCheckingCodex(false) }
-                }}
-                className="text-xs text-orange-400 hover:text-orange-300 disabled:text-gray-600 disabled:cursor-default"
-              >
-                {checkingCodex ? 'Updating…' : 'Check for update'}
-              </button>
-            </div>
-            {codexUpdate && ['failed', 'downloading', 'health-checking', 'verifying', 'updated'].includes(codexUpdate.state) && (
-              <p className={`text-xs ${codexUpdate.state === 'failed' ? 'text-amber-400' : 'text-gray-500'}`}>
-                {codexUpdate.message}
+            {/* Which models appear above is decided by your Codex CLI: an
+                out-of-date one cannot decode the current model list. */}
+            {s.codexFound === false ? (
+              <p className="text-xs text-amber-400">
+                Codex CLI was not found. Install it with npm install -g @openai/codex (then sign in from the
+                login screen), set its path under Paths, or switch to your Claude Code above.
+              </p>
+            ) : s.codexSource === 'legacy' ? (
+              <p className="text-xs text-gray-500">
+                Uses Codex {s.codexVersion}, the copy an earlier JobScan downloaded: it is newer than your own
+                Codex CLI, or you have none. JobScan no longer updates it -- install yours with npm install -g @openai/codex.
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500">
+                Uses your Codex CLI{s.codexVersion ? ` ${s.codexVersion}` : ''}. Keep it current with npm install -g @openai/codex.
               </p>
             )}
+          </div>
+          )}
+          <div className="flex flex-col gap-1">
+            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input
+                id="harness-enabled"
+                type="checkbox"
+                checked={harness.enabled}
+                onChange={e => void toggleHarness(e.target.checked)}
+                className="accent-orange-500"
+              />
+              Let Claude Code or Codex drive JobScan
+            </label>
+            <p className="text-xs text-gray-500">
+              A Claude Code or Codex session with the JobScan plugin can then rebuild, find jobs, rate them and stop the loop,
+              and hears every step as it happens. It can never apply, change settings or open anything.
+              {harness.enabled && (harness.connected
+                ? ' Connected now.'
+                : ' Waiting: run /jobscan:jobscan in Claude Code, or $jobscan:jobscan in Codex.')}
+            </p>
+            {harnessMsg && <p className="text-xs text-amber-400">{harnessMsg}</p>}
           </div>
           {field('ratingAgents', 'Rating Agents (parallel threads)', 'number')}
           {field('payloadAgents', 'Payload Agents (parallel threads)', 'number')}
@@ -308,16 +396,18 @@ export default function SettingsPanel({ onClose }: Props) {
           {field('jobscanExePath', 'jobscan.exe path')}
           {field('pythonDir', 'Python package dir (JOB_AUTOMATOR_PYTHON_DIR)')}
           {field('jobAutomatorHome', 'Job automator home (JOB_AUTOMATOR_HOME)')}
+          {engine === 'claude' && field('claudePath', 'Claude Code path (optional)', 'text', 'Found automatically when empty')}
+          {engine !== 'claude' && field('codexPath', 'Codex CLI path (optional)', 'text', 'Found automatically when empty')}
         </div>
 
         <div className="flex gap-2 justify-between mt-2 pt-2 border-t border-white/[0.06]">
-          <button
+          {engine === 'claude' ? <span /> : <button
             onClick={() => handleLogout(onClose)}
             className="px-4 py-2 rounded-full bg-red-900/50 hover:bg-red-800 text-red-300 text-sm transition-colors"
             title="Sign out of ChatGPT and return to login screen"
           >
             Sign Out
-          </button>
+          </button>}
           <div className="flex gap-2">
             <button
               onClick={onClose}

@@ -1,0 +1,8 @@
+{
+  "name": "jobscan",
+  "version": "1.0.0",
+  "description": "Drive the JobScan AI desktop app from Claude Code: check its status, start its six safe steps, relay your requests, and hear what happens. Numbers and labels only; no job-posting text reaches the session.",
+  "author": {
+    "name": "Saitarun Movva"
+  }
+}

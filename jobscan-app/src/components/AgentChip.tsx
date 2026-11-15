@@ -1,0 +1,110 @@
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { ipc } from '../ipc'
+
+interface Note { text: string; at: string; from: 'agent' | 'app' }
+interface HarnessStatus { enabled: boolean; connected: boolean; notes: Note[] }
+
+/**
+ * Shown only while "Let Claude Code or Codex drive JobScan" is on: whether a
+ * Claude Code or Codex session has been in touch in the last minute, and
+ * what it has said or started. Notes are the agent's own words, shown as
+ * plain text and labelled as such.
+ */
+export default function AgentChip() {
+  const [status, setStatus] = useState<HarnessStatus | null>(null)
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let alive = true
+    const load = (): void => {
+      ipc.invoke<HarnessStatus>('harness:get-status')
+        .then(s => { if (alive) setStatus(s ?? null) })
+        .catch(() => { /* chip stays as it was */ })
+    }
+    load()
+    const timer = setInterval(load, 10_000)
+    const onNote = (): void => load()
+    ipc.on('agent:note', onNote)
+    return () => { alive = false; clearInterval(timer); ipc.off('agent:note', onNote) }
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent): void => {
+      const t = e.target as Node
+      if (ref.current?.contains(t) || panelRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') setOpen(false) }
+    const onResize = (): void => setOpen(false)
+    window.addEventListener('mousedown', close)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('mousedown', close)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [open])
+
+  // The header is overflow-hidden and has a backdrop-filter, which clips
+  // anything drawn inside it, even position:fixed. The notes go on <body>,
+  // placed under the chip (the profile menu does the same).
+  const toggle = (): void => {
+    const rect = ref.current?.getBoundingClientRect()
+    if (rect) setPos({ top: rect.bottom + 8, right: Math.max(8, window.innerWidth - rect.right) })
+    setOpen(o => !o)
+  }
+
+  if (!status?.enabled) return null
+  const label = status.connected ? 'Agent connected' : 'Waiting for your agent'
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        aria-label={`${label}. Show its notes`}
+        className={[
+          'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
+          status.connected
+            ? 'border-orange-500/40 text-orange-200 bg-orange-900/20'
+            : 'border-white/[0.08] text-gray-400 bg-white/[0.04] hover:text-gray-200',
+        ].join(' ')}
+      >
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${status.connected ? 'bg-orange-400' : 'bg-gray-500'}`} aria-hidden />
+        <span className="truncate">{label}</span>
+      </button>
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          style={{ top: pos.top, right: pos.right }}
+          className="fixed w-80 max-w-[calc(100vw-16px)] max-h-80 overflow-auto rounded-xl border border-white/[0.08] bg-[rgba(38,38,36,0.98)] p-3 shadow-xl z-50"
+        >
+          <p className="text-xs text-gray-500 mb-2">
+            {status.connected
+              ? 'A Claude Code or Codex session is driving JobScan. It can start a rebuild, find jobs, rate them and stop the loop. It cannot apply or change settings.'
+              : 'Run /jobscan:jobscan in Claude Code, or $jobscan:jobscan in Codex, to let it drive JobScan.'}
+          </p>
+          {status.notes.length === 0 ? (
+            <p className="text-xs text-gray-600">Nothing from your agent yet.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {[...status.notes].reverse().map(n => (
+                <li key={n.at + n.text} className="text-xs">
+                  <span className="text-gray-500">{n.from === 'agent' ? 'From your agent' : 'JobScan'} · {new Date(n.at).toLocaleTimeString()}</span>
+                  <p className="text-gray-300 whitespace-pre-wrap break-words">{n.text}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>,
+        document.body,
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,14 @@
+{
+  "name": "jobscan",
+  "description": "Claude Code plugins for JobScan AI.",
+  "owner": {
+    "name": "Saitarun Movva"
+  },
+  "plugins": [
+    {
+      "name": "jobscan",
+      "source": "./jobscan-harness",
+      "description": "Drive the JobScan AI desktop app from Claude Code: check its status, start its six safe steps, relay your requests, and hear what happens."
+    }
+  ]
+}

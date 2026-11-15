@@ -1,0 +1,8 @@
+[
+  {
+    "name": "jobscan-feed",
+    "command": "node \"${CLAUDE_PLUGIN_ROOT}/server/feed.mjs\"",
+    "description": "JobScan notices: steps, progress, AI calls and clicks in its window",
+    "when": "on-skill-invoke:jobscan:jobscan"
+  }
+]

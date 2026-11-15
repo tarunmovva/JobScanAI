@@ -16,21 +16,8 @@ npm install --ignore-scripts
 echo "  ✓ npm install done"
 echo ""
 
-echo "Step 3/5: Cross-compile Go CLI + copy Codex binary..."
+echo "Step 3/5: Cross-compile Go CLI..."
 bash scripts/build-go.sh
-# Codex binary: copy from optional dep installed by npm install
-NM="$(pwd)/node_modules"
-BIN="$(pwd)/resources/bin"
-SRC="$NM/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex"
-# 0.153+ moved the binary to vendor/<triple>/bin/; older pins keep it in codex/.
-[ -f "$SRC" ] || SRC="$NM/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex/codex"
-if [ -f "$SRC" ]; then
-  cp "$SRC" "$BIN/codex-mac-arm64"
-  chmod +x "$BIN/codex-mac-arm64"
-  echo "  ✓ codex mac-arm64 copied from node_modules"
-else
-  echo "  ! codex-mac-arm64 not in node_modules — Codex login may fail"
-fi
 echo ""
 
 echo "Step 4/5: Bundle Python for this Mac platform..."

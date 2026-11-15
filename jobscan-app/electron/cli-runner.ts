@@ -2,7 +2,8 @@ import { spawn, SpawnOptions, ChildProcess } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import store from './state-store'
-import { tokenizeQueryFlags } from './query-flags'
+import { tokenizeQueryFlags, searchFlagProblem } from './query-flags'
+import { selectedEngineId } from './ai-engine'
 import { getCodexBinaryPath, activeCodexModel } from './codex-client'
 import { unattendedEnv } from './run-mode'
 import { collectChild, killTree, treeSpawnOptions } from './proc'
@@ -39,6 +40,10 @@ function getEnv(): NodeJS.ProcessEnv {
     // while the app was set to the cheapest. It reads the app config as a
     // fallback, but the app knowing its own choice should not depend on that.
     ...(recoveryModel ? { JOB_AUTOMATOR_RECOVERY_MODEL: recoveryModel } : {}),
+    // With Claude Code answering the AI calls, form repair (which runs Codex
+    // and clicks Submit itself) stays off: a job that needs repair lands in
+    // Defects, as with repair disabled. Repair through Claude is a follow-up.
+    ...(selectedEngineId() === 'claude' ? { JOB_AUTOMATOR_AI_RECOVERY: '0' } : {}),
     // Last, so nothing above can unset it: during a loop round nobody is at
     // the computer, and the fillers close every tab (JOB_AUTOMATOR_UNATTENDED).
     ...unattendedEnv(),
@@ -122,6 +127,9 @@ function searchFlagSupport(): Promise<Set<string>> {
 
 /** A search's tokens, with the pool's defaults added where the search does not set them. */
 async function withSearchDefaults(searchTokens: string[]): Promise<string[]> {
+  // Last line of defence: callers already refuse these (query-flags.ts).
+  const unsafe = searchFlagProblem(searchTokens)
+  if (unsafe) throw new Error(unsafe)
   const tokens = [...searchTokens]
   // jobscan's default --limit is 25 — far too small for the retrieval pool.
   // Relevance sort (bm25, title-weighted) makes top-100 the right slice.

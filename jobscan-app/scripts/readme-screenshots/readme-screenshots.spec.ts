@@ -6,10 +6,12 @@
  *   npx playwright test --config scripts/readme-screenshots/playwright.config.ts
  *
  * Every screen is rendered by the real app with SAMPLE data: a made-up
- * candidate and made-up companies. Nothing reaches Codex, jobscan or Chrome
- * (E2E_TEST=1), and the app runs on a throwaway data folder
- * (JOBSCAN_USER_DATA_DIR), so your own profile, resume and history are never
- * read or touched.
+ * candidate and made-up companies. Nothing reaches Codex, Claude Code,
+ * jobscan or Chrome (E2E_TEST=1), and the app runs on a throwaway data folder
+ * (JOBSCAN_USER_DATA_DIR) and Codex home, so your own profile, resume,
+ * history and sign-in are never read or touched. Codex counts as installed
+ * through the test stand-in (it is never asked anything), so the sign-in
+ * screen and Settings look the way they do for a user who has it.
  *
  * Screens whose state lives only in the main process (the rebuild progress,
  * loop mode, the IMAP status) are fed by swapping that one IPC handler for a
@@ -19,11 +21,13 @@ import { test, _electron as electron, ElectronApplication, Page } from '@playwri
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
+import http from 'http'
 
 const APP_ROOT = path.resolve(__dirname, '..', '..')
 const OUT_DIR = path.resolve(APP_ROOT, '..', 'docs', 'screenshots')
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'jobscan-readme-shots-'))
 const CONFIG = path.join(DATA_DIR, 'config.json')
+const CODEX_STAND_IN = { command: process.execPath, args: [path.join(APP_ROOT, 'tests', 'unit', 'fixtures', 'fake-app-server.cjs')] }
 
 const W = 1440
 const H = 900
@@ -260,7 +264,10 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [path.join(APP_ROOT, 'out', 'main', 'main.js')],
     cwd: APP_ROOT,
-    env: { ...process.env, E2E_TEST: '1', JOBSCAN_USER_DATA_DIR: DATA_DIR },
+    env: {
+      ...process.env, E2E_TEST: '1', JOBSCAN_USER_DATA_DIR: DATA_DIR,
+      CODEX_HOME: path.join(DATA_DIR, 'codex-home'), JOBSCAN_E2E_CODEX_COMMAND: JSON.stringify(CODEX_STAND_IN),
+    },
     timeout: 30_000,
   })
   const page = await app.firstWindow({ timeout: 20_000 })
@@ -288,6 +295,20 @@ async function seed(page: Page, p: Record<string, unknown>): Promise<void> {
   await page.waitForLoadState('domcontentloaded')
   await page.locator('header').waitFor({ state: 'visible', timeout: 15_000 })
   await page.waitForTimeout(900)   // screen entrance + ambient background settle
+}
+
+/** One authorised call to the app's harness endpoint, as the jobscan plugin makes it. */
+function harnessCall(method: string, route: string, body?: unknown): Promise<number> {
+  const { port, token } = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'harness.json'), 'utf-8')) as { port: number; token: string }
+  const data = body === undefined ? undefined : JSON.stringify(body)
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      host: '127.0.0.1', port, path: route, method,
+      headers: { authorization: `Bearer ${token}`, ...(data ? { 'content-type': 'application/json' } : {}) },
+    }, res => { res.resume(); res.on('end', () => resolve(res.statusCode ?? 0)) })
+    req.on('error', reject)
+    req.end(data)
+  })
 }
 
 async function shot(page: Page, name: string): Promise<void> {
@@ -418,6 +439,29 @@ test('screens', async () => {
     await page.locator('button[title="Loop mode"]').click()
     await page.waitForTimeout(500)
     await shot(page, '14-loop-panel')
+    await page.keyboard.press('Escape')
+
+    // 15 a Claude Code or Codex session driving JobScan: the header chip and its notes
+    await stub(app, 'loop:get-status', { ...LOOP_STATUS, phase: 'off', round: 0, stage: null, paused: [], excluded: [], history: [] })
+    let found = 0
+    await seed(page, {
+      ...BASE, appState: 'query_gen',
+      queryList: QUERIES.map((q, i) => ({ ...q, count: COUNTS[i] })),
+      queryGenResults: QUERIES.map((q, i) => { found += FOUND[i]; return { index: i, query: { ...q, count: COUNTS[i] }, found: FOUND[i], totalAfter: found } }),
+      candidates: POOL,
+    })
+    await page.evaluate(() => (window as unknown as { api: { invoke: (c: string, a?: unknown) => Promise<unknown> } }).api.invoke('harness:set', { enabled: true }))
+    for (let i = 0; i < 50 && !fs.existsSync(path.join(DATA_DIR, 'harness.json')); i++) await page.waitForTimeout(100)
+    for (const text of [
+      'Rebuilt the job database: 812 new jobs in 4 min.',
+      'Started Find Jobs from your resume.',
+      'Find Jobs is done: 6 searches, 362 jobs. They are being rated now; pick the ones you want in the window.',
+    ]) await harnessCall('POST', '/v1/notes', { text })
+    await harnessCall('GET', '/v1/status')
+    await page.getByRole('button', { name: /Agent connected/ }).waitFor({ timeout: 15_000 })
+    await page.getByRole('button', { name: /Agent connected/ }).click()
+    await page.waitForTimeout(500)
+    await shot(page, '15-agent-chip')
   } finally {
     await app.close()
   }

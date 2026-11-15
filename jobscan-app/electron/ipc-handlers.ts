@@ -4,10 +4,15 @@ import path from 'path'
 import store, { peek } from './state-store'
 import { isOpenableRecordFile } from './record-files'
 import { appliedKeys, isApplied } from './applied-jobs'
-import { clearCodexClient, getCodexSpawnSpec, buildSpawnEnv, listCodexModels, codexLoginStatus, warmCodex } from './codex-client'
-import { ensureLatestCodex, getUpdateStatus, reconcileSavedModel } from './codex-updater'
+import {
+  clearCodexClient, getCodexSpawnSpec, buildSpawnEnv, listCodexModels, codexLoginStatus, warmCodex,
+  reconcileSavedModel, codexInstalled, codexInfo,
+} from './codex-client'
 import { focusApplicationTab } from './chrome-tabs'
 import { automatorPython } from './cli-runner'
+import { aiEngine, selectedEngineId, engineIdFrom } from './ai-engine'
+import { claudeBinary } from './ai-engine-claude'
+import { noticeEvent } from './notice-hub'
 import {
   runQueryGen, runUserQueryGen, runRating,
   runExtract, runPayloadGen, runFetch, setState,
@@ -35,7 +40,8 @@ const DESTRUCTIVE_FROM: ReadonlySet<AppState> = new Set(['board'])
 
 // Safe IPC send — guards against the renderer window being destroyed mid-
 // shutdown (child-process error handlers fire after before-quit).
-function safeSendError(message: string): void {
+export function safeSendError(message: string): void {
+  noticeEvent('pipeline:error', { message })
   const win = BrowserWindow.getAllWindows()[0]
   if (!win || win.isDestroyed()) return
   try {
@@ -91,14 +97,20 @@ const loopIsOn = (): boolean => activeLoop?.isOn() === true
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function lockedWhileLooping(channel: string, listener: (e: IpcMainInvokeEvent, ...args: any[]) => unknown): void {
-  ipcMain.handle(channel, (e, ...args) => (loopIsOn() ? { ok: false, error: LOOP_ON } : listener(e, ...args)))
+  ipcMain.handle(channel, (e, ...args) => {
+    if (loopIsOn()) return { ok: false, error: LOOP_ON }
+    // A click in the window, heard by a driving agent: which action only.
+    noticeEvent('user_action', { action: channel })
+    return listener(e, ...args)
+  })
 }
 
 export function registerLoopIpc(loop: Loop): void {
   activeLoop = loop
   ipcMain.handle('loop:get-status', () => loop.status())
-  ipcMain.handle('loop:start', () => loop.start())
+  ipcMain.handle('loop:start', () => { noticeEvent('user_action', { action: 'loop:start' }); return loop.start() })
   ipcMain.handle('loop:stop', async (_e, opts?: { mode?: 'after-round' | 'now' }) => {
+    noticeEvent('user_action', { action: 'loop:stop' })
     if (opts?.mode === 'now') await loop.stopNow()
     else loop.stopAfterRound()
     return { ok: true }
@@ -111,7 +123,10 @@ export function registerIpcHandlers(): void {
   // ── Auth ──────────────────────────────────────────────────────────────────
   lockedWhileLooping('auth:login', async () => {
     await warmCodex()   // a first start off the main thread (binary-warmup.ts)
-    const spec = getCodexSpawnSpec(['login'])
+    let spec: ReturnType<typeof getCodexSpawnSpec>
+    try { spec = getCodexSpawnSpec(['login']) } catch (e) {
+      return { success: false, message: String((e as Error).message ?? e) }   // no Codex installed
+    }
 
     return new Promise<{ success: boolean; message?: string }>((resolve) => {
       const child = spawn(spec.command, spec.args, {
@@ -141,7 +156,11 @@ export function registerIpcHandlers(): void {
           return
         }
         // Exit 0 — probe to verify actual auth state
-        const probeSpec = getCodexSpawnSpec(['login', 'status'])
+        let probeSpec: ReturnType<typeof getCodexSpawnSpec>
+        try { probeSpec = getCodexSpawnSpec(['login', 'status']) } catch (e) {
+          resolve({ success: false, message: String((e as Error).message ?? e) })   // uninstalled meanwhile
+          return
+        }
         const probeChild = spawn(probeSpec.command, probeSpec.args, {
           windowsHide: true,
           shell: probeSpec.shell,
@@ -177,6 +196,8 @@ export function registerIpcHandlers(): void {
     // Match the goto-state→auth path: kill any running pipeline first so
     // Settings "Sign Out" doesn't leave child processes running.
     await cancelActivePipeline('logout')
+    // Claude mode never signs anyone out: the user's own Codex sign-in is theirs.
+    if (selectedEngineId() === 'claude') { setState('auth'); return }
     await clearCodexClient()
     setState('auth')
     // Run codex logout in background (best effort)
@@ -197,7 +218,9 @@ export function registerIpcHandlers(): void {
     // triggers (auth → resume) would race seeded-state assertions.
     // codexLoginStatus answers false under E2E_TEST without spawning.
     // Unknown (codex would not run) shows as signed out, as it always has.
-    const loggedIn = (await codexLoginStatus()) === true
+    // With Claude Code as the engine, "signed in" is Claude Code's own sign-in.
+    const claude = selectedEngineId() === 'claude'
+    const loggedIn = claude ? await aiEngine().ready() : (await codexLoginStatus()) === true
     if (loggedIn) {
       // Auto-advance ONLY when currently on auth screen — otherwise this
       // probe (which AuthScreen fires on mount during the brief moment
@@ -208,7 +231,10 @@ export function registerIpcHandlers(): void {
         setState('resume')
       }
     }
-    return { loggedIn }
+    return {
+      loggedIn, engine: claude ? 'claude' : 'codex',
+      ...(claude ? { claudeFound: claudeBinary() !== null } : { codexFound: codexInstalled() }),
+    }
   })
 
   // ── Resume ────────────────────────────────────────────────────────────────
@@ -482,14 +508,24 @@ export function registerIpcHandlers(): void {
     imapConfigured: store.get('imapConfigured'),
     resumePath: store.get('resumePath'),
     // codexToken removed — auth managed by Codex CLI
+    aiEngine: selectedEngineId(),
+    claudeModel: store.get('claudeModel') ?? '',
+    claudePath: store.get('claudePath') ?? '',
+    claudeFound: claudeBinary() !== null,
+    codexPath: store.get('codexPath') ?? '',
+    codexFound: codexInstalled(),
+    ...(() => { const c = codexInfo(); return { codexVersion: c?.version ?? '', codexSource: c?.source ?? '' } })(),
   }))
 
   ipcMain.handle('settings:save', async (_e, partial: Record<string, unknown>) => {
+    const codexPathBefore = String(store.get('codexPath') ?? '')
     for (const [k, v] of Object.entries(partial)) {
       // Optional fields never set (e.g. resumePath on a fresh profile) arrive
       // as undefined; electron-store's set() throws on undefined, which made
       // the whole save reject and left the Settings panel stuck open.
       if (v === undefined) continue
+      // The engine changes only through engine:set, which refuses mid-run.
+      if (k === 'aiEngine' || k === 'claudeFound' || k === 'codexFound' || k === 'codexVersion' || k === 'codexSource') continue
       store.set(k as never, v as never)
     }
     // Note: previously called clearCodexClient() to handle API-key rotation.
@@ -497,6 +533,25 @@ export function registerIpcHandlers(): void {
     // client mid-run interrupts the in-flight pipeline. Removed.
     // A saved codexModel applies on the NEXT turn — runTurn reads the store
     // per call — so no client restart is needed for model switches either.
+    // A new Codex path does need one: the running app-server is the old
+    // binary. Only when idle; mid-run the new path applies from the next start.
+    if (String(store.get('codexPath') ?? '') !== codexPathBefore && !isPipelineActive() && !isRatingEngineActive()) {
+      await clearCodexClient()
+    }
+  })
+
+  // Which engine answers the AI calls. Window-only, refused while the loop is
+  // on (lockedWhileLooping) or while anything is running: a run, or a rating
+  // engine still scoring, would finish under the other engine and cache its
+  // results under the wrong hash.
+  lockedWhileLooping('engine:set', async (_e, arg?: { engine?: unknown }) => {
+    if (isPipelineActive() || isRatingEngineActive()) {
+      return { ok: false, reason: 'busy', error: 'Finish or stop the current run first.' }
+    }
+    const engine = engineIdFrom(arg?.engine)
+    store.set('aiEngine', engine)
+    const ready = await aiEngine().ready().catch(() => false)
+    return { ok: true, engine, ready, ...(engine === 'claude' ? { claudeFound: claudeBinary() !== null } : {}) }
   })
 
   // Models for the Settings dropdown. Never throws — the renderer always gets
@@ -526,8 +581,6 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  // Codex CLI version + auto-update. The renderer shows which binary is in use
-  // and can force a check; the boot check is throttled to once a day.
   // "Finish it" on a blocked application. The tab was left open with every
   // answer already in it, so raising THAT tab is the whole point — opening the
   // apply URL again would hand the user a blank form.
@@ -540,14 +593,6 @@ export function registerIpcHandlers(): void {
     return result
   })
 
-  ipcMain.handle('codex:update-status', () => getUpdateStatus())
-
-  lockedWhileLooping('codex:check-update', async () => {
-    if (process.env['E2E_TEST'] === '1') return { state: 'skipped', message: 'disabled in e2e' }
-    const status = await ensureLatestCodex({ force: true })
-    if (status.state === 'updated') await clearCodexClient()   // next turn spawns the new binary
-    return status
-  })
 
   // ── State rehydration ─────────────────────────────────────────────────────
   ipcMain.handle('state:get', () => ({
@@ -644,6 +689,7 @@ export function registerIpcHandlers(): void {
     // Auth target: logout flow (kill codex + launch logout cli in background)
     if (target === 'auth') {
       await cancelActivePipeline('goto:auth')
+      if (selectedEngineId() === 'claude') { setState('auth'); return { ok: true } }
       await clearCodexClient()
       try {
         const spec = getCodexSpawnSpec(['logout'])

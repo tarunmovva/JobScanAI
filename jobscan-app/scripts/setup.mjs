@@ -126,32 +126,13 @@ function setupPython() {
 //
 // A program the antivirus has not seen waits for its scan the first time it
 // starts, and the app starts these on the thread that draws its window: a
-// new codex.exe froze it for 11 s. Each is started once here instead, once
+// new binary once froze it for 11 s. Each is started once here instead, once
 // per file (size and time recorded in node_modules/.cache).
-
-/** The Codex binary npm installed for this platform, if any. */
-function bundledCodex() {
-  const root = path.join(APP, 'node_modules', '@openai')
-  let pkgs = []
-  try { pkgs = fs.readdirSync(root).filter(n => n.startsWith('codex-')) } catch { return null }
-  for (const pkg of pkgs) {
-    const vendor = path.join(root, pkg, 'vendor')
-    let triples = []
-    try { triples = fs.readdirSync(vendor) } catch { continue }
-    for (const triple of triples) {
-      for (const sub of ['bin', 'codex']) {
-        const exe = path.join(vendor, triple, sub, WIN ? 'codex.exe' : 'codex')
-        if (fs.existsSync(exe)) return exe
-      }
-    }
-  }
-  return null
-}
 
 function firstStarts() {
   let stamp = {}
   try { stamp = JSON.parse(fs.readFileSync(WARM_STAMP, 'utf-8')) } catch { /* none yet */ }
-  const targets = [[BIN, ['--help']], [VENV_PY, ['--version']], [bundledCodex(), ['--version']]]
+  const targets = [[BIN, ['--help']], [VENV_PY, ['--version']]]
   let changed = false
   for (const [exe, args] of targets) {
     if (!exe || !fs.existsSync(exe)) continue

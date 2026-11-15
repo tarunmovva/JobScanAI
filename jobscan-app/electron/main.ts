@@ -2,25 +2,32 @@ import { app, BrowserWindow, dialog } from 'electron'
 // First: it may move userData, and the store is created when imported below.
 import './user-data-dir'
 import path from 'path'
-import os from 'os'
 import fs from 'fs'
 import { spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import { monitorEventLoopDelay } from 'perf_hooks'
 import { registerIpcHandlers, registerLoopIpc } from './ipc-handlers'
-import { discardInterruptedRun, cancelActivePipeline } from './pipeline'
+import { discardInterruptedRun, cancelActivePipeline, ratingEngineCancel } from './pipeline'
 import { setPipelineWindow, setState, isPipelineActive } from './pipeline'
 import { createLoop, type Loop } from './loop-runner'
 import { createLoopDeps } from './loop-deps'
 import type { LoopState } from '../src/types'
-import { setBusyCheck, scheduleCodexUpdateCheck } from './codex-updater'
-import { clearCodexClient, checkAuth } from './codex-client'
+import { clearCodexClient, checkAuth, probeCodexModelIds, reconcileSavedModel } from './codex-client'
 import { ensureProfiles, syncActiveSnapshot } from './profiles'
 import store from './state-store'
 import { createQuitGuard } from './quit-guard'
 import { resolvePython } from './app-paths'
+import { codexHome } from './codex-home'
+import { registerEngines, aiEngine, selectedEngineId } from './ai-engine'
+import { createCodexEngine } from './ai-engine-codex'
+import { createClaudeEngineForApp, disposeClaudeWorkDir } from './ai-engine-claude'
+import { registerHarness, startHarness, stopHarness } from './harness'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// The AI engines, registered before anything can make an AI call. The
+// machine-wide `aiEngine` setting picks one; Codex is the default.
+registerEngines({ codex: createCodexEngine(), claude: createClaudeEngineForApp() }, () => store.get('aiEngine'))
 
 // ── Codex logs DB maintenance ────────────────────────────────────────────────
 //
@@ -39,7 +46,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // minutes for. Discard the WAL+SHM directly in that case — same approach as
 // the manual cleanup that fixed the original bloat.
 function truncateCodexWal(): void {
-  const dbDir = path.join(os.homedir(), '.codex')
+  // Tests never touch a Codex log folder, not even a scratch one.
+  if (process.env['E2E_TEST'] === '1') return
+  const dbDir = codexHome()
   const dbPath = path.join(dbDir, 'logs_2.sqlite')
   const walPath = path.join(dbDir, 'logs_2.sqlite-wal')
   const shmPath = path.join(dbDir, 'logs_2.sqlite-shm')
@@ -137,6 +146,10 @@ function createWindow(): void {
 // Keys from removed features (Auto-Apply scheduler, standalone search step);
 // scrubbed so old configs stay clean (delete of a missing key is a no-op).
 const REMOVED_KEYS = [
+  // The Codex updater is gone (Codex is now the user's own CLI). Its
+  // codexRejectedVersions stays: codex-locate still honours it for the copies
+  // that updater left in <userData>/codex.
+  'codexAutoUpdate', 'codexManagedVersion', 'codexUpdateCheckedAt',
   'automationEnabled', 'automationPaused', 'automationRunIntervalMin',
   'automationFetchIntervalMin', 'automationMinRating', 'automationMaxPerRun',
   'automationAutoPauseFailures', 'automationConsecutiveFailures',
@@ -163,7 +176,9 @@ function watchMainProcessStalls(): void {
 
 app.whenReady().then(() => {
   watchMainProcessStalls()
-  truncateCodexWal()  // crash-recovery safety net before any codex.exe spawn
+  // Claude Code answers the AI calls: nothing of Codex's runs or is touched.
+  const claudeMode = selectedEngineId() === 'claude'
+  if (!claudeMode) truncateCodexWal()  // crash-recovery safety net before any codex.exe spawn
   // A run interrupted by the app closing does not carry into this one.
   // Runs before the window so the renderer never renders the stale board.
   try {
@@ -177,7 +192,7 @@ app.whenReady().then(() => {
   // Every launch lands on Resume (Auth if logged out); the last session's
   // screen is never restored. Stage data (candidates, ratings, hashes) is
   // kept, so walking forward again re-emits cached results instantly.
-  setState(checkAuth() ? 'resume' : 'auth')
+  setState(claudeMode || checkAuth() ? 'resume' : 'auth')
   for (const key of REMOVED_KEYS) store.delete(key as never)
   ensureProfiles() // migrate first launch to a "Default" profile + crash-heal snapshot
   // Loop mode is always off at launch. A round still marked active means the
@@ -193,12 +208,33 @@ app.whenReady().then(() => {
   }
   loop = createLoop(createLoopDeps(() => win))
   registerLoopIpc(loop)
+  registerHarness(loop)
   createWindow()
-  // Keep the Codex CLI current. Deferred and non-blocking: a bundled binary
-  // ages out of being able to read the model list, but a slow or failed
-  // registry check must never delay the window or break a launch.
-  setBusyCheck(isPipelineActive)
-  scheduleCodexUpdateCheck()
+  // "Let Claude Code or Codex drive JobScan": off unless the user turned it on.
+  if (store.get('harnessEnabled') === true) {
+    void startHarness().then(r => { if (!r.ok) console.warn('[harness]', r.error) })
+  }
+  if (claudeMode) {
+    // Claude Code's sign-in is checked by running it, so not before the
+    // window: a launch never waits on it. Signed out, the sign-in screen
+    // explains what to do -- unless the user has already moved on.
+    void aiEngine().ready().then(ok => {
+      if (!ok && store.get('appState') === 'resume') setState('auth')
+    }).catch(() => { /* stays on Resume; AI steps report the problem */ })
+    return
+  }
+  // A saved Codex model the API has since withdrawn fails every turn: check it
+  // once, deferred and off the critical path, with a throwaway app-server (as
+  // the updater's check did), and reset it to Auto if gone. Never while a run
+  // is going, signed out, in Claude mode or in tests.
+  const quiet = (): boolean =>
+    process.env['E2E_TEST'] !== '1' && !isPipelineActive() && store.get('aiEngine') !== 'claude' && checkAuth()
+  setTimeout(() => {
+    if (!quiet() || !String(store.get('codexModel') ?? '').trim()) return
+    probeCodexModelIds()
+      .then(ids => { if (ids && quiet()) reconcileSavedModel(ids) })
+      .catch(() => { /* no Codex: the next turn says so */ })
+  }, 15_000).unref?.()
 })
 
 app.on('window-all-closed', () => {
@@ -271,6 +307,16 @@ app.on('before-quit', (event) => {
     // start; a manual run was confirmed above.
     if (looping || isPipelineActive()) {
       try { await cancelActivePipeline('quit') } catch { /* best effort */ }
+    }
+    // A driving agent hears that the app is going, then the endpoint closes.
+    try { await stopHarness(true) } catch { /* best effort */ }
+    if (selectedEngineId() === 'claude') {
+      // The detached rating engine is not under the run's token: stop it
+      // first (so a batch that settles now saves nothing), then end every
+      // Claude Code process -- none may outlive the app.
+      try { ratingEngineCancel() } catch { /* best effort */ }
+      try { await aiEngine().cancelAll('quit') } catch { /* best effort */ }
+      disposeClaudeWorkDir()
     }
     // Graceful codex shutdown so SQLite checkpoints WAL — prevents unbounded WAL growth
     // that causes "Codex RPC timeout: initialize" after many sessions.
