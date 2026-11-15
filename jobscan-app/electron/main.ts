@@ -210,7 +210,7 @@ app.whenReady().then(() => {
   registerLoopIpc(loop)
   registerHarness(loop)
   createWindow()
-  // "Let Claude Code drive JobScan": off unless the user turned it on.
+  // "Let Claude Code or Codex drive JobScan": off unless the user turned it on.
   if (store.get('harnessEnabled') === true) {
     void startHarness().then(r => { if (!r.ok) console.warn('[harness]', r.error) })
   }

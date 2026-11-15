@@ -1,13 +1,13 @@
 // The jobscan plugin (jobscan-harness/ at the repo root): the MCP server and
-// the feed monitor a Claude Code session uses to drive JobScan, run here as
-// child processes against a real harness endpoint from the app.
+// the feed monitor a Claude Code or Codex session uses to drive JobScan, run
+// here as child processes against a real harness endpoint from the app.
 //
 // What must hold: the session hears numbers and labels only, even from a
 // port that is not JobScan's; the MCP server never dies when the app is
 // away; a cancelled wait hangs up at once; calls in flight finish on their
 // own; the feed says nothing while the app is away and one short line per
 // batch while it is there; and the plugin files are in the shapes Claude
-// Code loads.
+// Code and Codex load.
 //
 // Run: npm run test:unit
 const test = require('node:test')
@@ -292,7 +292,11 @@ test('initialize echoes the protocol version; tools/list has exactly the four to
     assert.equal(t.inputSchema.additionalProperties, false, t.name)
     assert.deepEqual(t._meta, { 'anthropic/alwaysLoad': true }, t.name)
     assert.ok(t.description.length > 40 && t.description.length < 700, `${t.name}: a short description`)
+    assert.equal(t.annotations.openWorldHint, false, `${t.name}: talks to this computer's JobScan only`)
+    assert.equal(t.annotations.destructiveHint ?? false, false, t.name)
   }
+  const readOnly = tools.filter(t => t.annotations.readOnlyHint).map(t => t.name).sort()
+  assert.deepEqual(readOnly, ['jobscan_status', 'jobscan_wait'], 'only status and wait are marked read-only')
   const by = Object.fromEntries(tools.map(t => [t.name, t.inputSchema]))
   assert.deepEqual(by.jobscan_status.properties, {})
   assert.deepEqual(by.jobscan_action.required, ['name'])
@@ -466,7 +470,7 @@ test('with JobScan away, every tool says so plainly and the server keeps running
   const file = path.join(dir, 'harness.json')
   const mcp = startMcp(cleanup, file)
   await mcp.init()
-  const away = /^JobScan is not running, or 'Let Claude Code drive JobScan' is off in Settings \(.+\)\.$/
+  const away = /^JobScan is not running, or 'Let Claude Code or Codex drive JobScan' is off in Settings \(.+\)\.$/
   for (const [name, args] of [['jobscan_status', {}], ['jobscan_action', { name: 'find_jobs' }], ['jobscan_note', { text: 'hi' }], ['jobscan_wait', { seconds: 1 }]]) {
     const r = await mcp.tool(name, args)
     assert.equal(r.isError, true, name)
@@ -680,6 +684,71 @@ test('the plugin files are in the shapes Claude Code loads, and the code needs n
     assert.ok(!/import\.meta\.dirname|AbortSignal\.any/.test(src), `${f} runs on Node 18`)
   }
 })
+
+test('the same plugin is a Codex plugin: manifest, MCP server and marketplace in the shapes Codex loads', () => {
+  const read = p => JSON.parse(fs.readFileSync(path.join(PLUGIN, p), 'utf8'))
+  const claude = read('.claude-plugin/plugin.json')
+  const manifest = read('.codex-plugin/plugin.json')
+  assert.equal(manifest.name, claude.name)
+  assert.equal(manifest.version, claude.version, 'one version for both')
+  assert.equal(manifest.skills, './skills/', 'the one skill both share')
+  assert.equal(manifest.mcpServers, './.codex-mcp.json')
+  assert.ok(manifest.description.length > 20)
+  assert.ok(manifest.interface.displayName.length > 0)
+  assert.ok(fs.existsSync(path.join(PLUGIN, 'skills', 'jobscan', 'SKILL.md')))
+
+  // Codex does not expand ${CLAUDE_PLUGIN_ROOT}: it runs the server from the
+  // plugin folder (cwd "."), and passes on only the variables listed.
+  const servers = read('.codex-mcp.json').mcpServers
+  assert.deepEqual(Object.keys(servers), ['jobscan'])
+  const s = servers.jobscan
+  assert.equal(s.command, 'node')
+  assert.deepEqual(s.args, ['./server/mcp.mjs'])
+  assert.equal(s.cwd, '.')
+  assert.ok(fs.existsSync(path.join(PLUGIN, s.args[0])))
+  const lib = fs.readFileSync(LIB, 'utf8')
+  const read_ = [...new Set([...lib.matchAll(/\benv\.([A-Z_]+)/g)].map(m => m[1]))].sort()
+  assert.deepEqual(read_, ['APPDATA', 'JOBSCAN_HARNESS_FILE', 'XDG_CONFIG_HOME'])
+  for (const v of [...read_, 'HOME', 'USERPROFILE']) assert.ok(s.env_vars.includes(v), `${v} reaches the server`)
+
+  const market = JSON.parse(fs.readFileSync(path.join(REPO, '.agents', 'plugins', 'marketplace.json'), 'utf8'))
+  assert.equal(market.name, 'jobscan', 'the same marketplace name as for Claude Code')
+  assert.deepEqual(market.plugins.map(p => [p.name, p.source]), [['jobscan', { source: 'local', path: './jobscan-harness' }]])
+  assert.equal(market.plugins[0].policy.installation, 'AVAILABLE')
+})
+
+// The Codex CLI, when it is installed here (never on CI), in a throwaway
+// CODEX_HOME: it adds the marketplace, installs the plugin, and lists the
+// server and the skill. No sign-in is needed and nothing is sent anywhere.
+function runCodex(args, env) {
+  const opts = { encoding: 'utf8', timeout: 90_000, windowsHide: true, env }
+  let r = spawnSync('codex', args, opts)
+  if (r.error?.code === 'ENOENT' && process.platform === 'win32') {
+    r = spawnSync('codex', args.map(a => (/[\s"&|<>^]/.test(a) ? `"${a}"` : a)), { ...opts, shell: true })
+  }
+  return r
+}
+const codexHere = !process.env.CI && runCodex(['--version'], process.env).status === 0
+
+test('Codex installs the plugin from this repo and finds its server and skill', {
+  skip: codexHere ? false : (process.env.CI ? 'on CI' : 'codex is not on PATH'),
+}, scoped(async (cleanup) => {
+  const home = tempDir(cleanup)
+  const env = { ...process.env, CODEX_HOME: home }
+  const ok = (r) => assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`)
+  ok(runCodex(['plugin', 'marketplace', 'add', REPO], env))
+  ok(runCodex(['plugin', 'add', 'jobscan@jobscan'], env))
+  const list = runCodex(['mcp', 'list', '--json'], env)
+  ok(list)
+  const server = JSON.parse(list.stdout).find(x => x.name === 'jobscan')
+  assert.ok(server, 'the jobscan server is listed')
+  assert.equal(server.enabled, true)
+  assert.equal(server.transport.command, 'node')
+  assert.ok(fs.existsSync(path.join(server.transport.cwd, 'server', 'mcp.mjs')), 'the server runs from the installed plugin')
+  const prompt = runCodex(['debug', 'prompt-input', 'hello'], env)
+  ok(prompt)
+  assert.match(prompt.stdout, /jobscan:jobscan: Drive the JobScan AI desktop app/, 'the skill is offered to the model')
+}))
 
 // `claude plugin validate` when Claude Code is installed here (never on CI).
 function runClaude(args) {

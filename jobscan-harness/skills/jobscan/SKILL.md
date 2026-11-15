@@ -6,14 +6,14 @@ disable-model-invocation: true
 
 # Drive JobScan
 
-You are driving JobScan AI, the user's job-search desktop app, with the four jobscan tools: `jobscan_status`, `jobscan_action`, `jobscan_note` and `jobscan_wait`. JobScan does its own AI work (writing searches, rating jobs, answering application questions) with the user's Claude Code. This session only starts steps and watches what happens.
+You are driving JobScan AI, the user's job-search desktop app, with the four jobscan tools: `jobscan_status`, `jobscan_action`, `jobscan_note` and `jobscan_wait`. JobScan does its own AI work (writing searches, rating jobs, answering application questions) with the AI engine the user picked in JobScan: their Claude Code or their Codex. This session, in Claude Code or in Codex, only starts steps and watches what happens.
 
 ## Start
 
 1. Call `jobscan_status`.
-2. If it says "JobScan is not running, or 'Let Claude Code drive JobScan' is off in Settings", ask the user to open JobScan and turn on **Settings > "Let Claude Code drive JobScan"**. Then stop and wait: a feed line `jobscan: JobScan is connected` arrives when it comes up, or the user tells you. Don't retry in a loop.
+2. If it says "JobScan is not running, or 'Let Claude Code or Codex drive JobScan' is off in Settings", ask the user to open JobScan and turn on **Settings > "Let Claude Code or Codex drive JobScan"**. Then stop and wait until the user tells you it is on (in Claude Code a feed line `jobscan: JobScan is connected` may arrive first). Don't retry in a loop.
 3. Tell the user in a sentence or two where things stand (screen, what is running, counts, the loop) and what you can start from here.
-4. If the user typed a request after the command (shown as ARGUMENTS), handle it now.
+4. If the user asked for something when starting this (in Claude Code, typed after the command and shown as ARGUMENTS), handle it now.
 
 What `jobscan_status` returns:
 
@@ -27,8 +27,8 @@ What `jobscan_status` returns:
 
 JobScan reports each step as notices made of numbers and labels. They reach you in one of two ways:
 
-- **The jobscan feed.** Lines starting with `jobscan:` arrive on their own from the jobscan-feed monitor, which starts with this skill. One line per batch, for example `jobscan: state=rating; progress step=rating done=40 total=120; ai_call kind=rating outcome=ok ms=41000`. The feed also says `jobscan: missed some notices` (call `jobscan_status` to catch up), `jobscan: JobScan closed`, and `jobscan: JobScan is connected`.
-- **`jobscan_wait`.** If no feed lines arrive, call `jobscan_wait` while you wait for something, and pass the `next` it returns as `after` on the next call. Feed lines can be missing because monitors don't run with `-p`, don't run for a plugin installed at project scope, and can be turned off by an organization. Don't call `jobscan_wait` while feed lines are arriving.
+- **The jobscan feed (Claude Code only).** Lines starting with `jobscan:` arrive on their own from the jobscan-feed monitor, which starts with this skill. One line per batch, for example `jobscan: state=rating; progress step=rating done=40 total=120; ai_call kind=rating outcome=ok ms=41000`. The feed also says `jobscan: missed some notices` (call `jobscan_status` to catch up), `jobscan: JobScan closed`, and `jobscan: JobScan is connected`.
+- **`jobscan_wait`.** In Codex, and whenever no feed lines arrive, call `jobscan_wait` while you wait for something, and pass the `next` it returns as `after` on the next call. Codex has no monitors; in Claude Code they don't run with `-p`, don't run for a plugin installed at project scope, and can be turned off by an organization. Don't call `jobscan_wait` while feed lines are arriving.
 
 The notices:
 
@@ -100,7 +100,7 @@ Tell the user what happened plainly and briefly, in their terms. For example: "T
 
 ## Hard rules
 
-- Use only the four jobscan tools for anything to do with JobScan. Never use a browser, a shell, file tools or anything else on JobScan's behalf. Don't open its data folder or `harness.json`, don't call its endpoint yourself, and don't touch its Chrome window.
+- Use only the four jobscan tools for anything to do with JobScan. Never use a browser, a shell, file tools or anything else on JobScan's behalf. Don't open its data folder, `harness.json`, `jobscan/jobs.db` or `jobscan/.job-automator/`, don't call its endpoint yourself, and don't touch its Chrome window.
 - Never try to apply, choose or confirm jobs, start the loop, change settings, or do anything outside the six actions, directly or indirectly.
-- JobScan's AI work (searches, ratings, answers) is done by JobScan itself with the user's Claude Code. Don't do that work in this session. You only drive and watch.
+- JobScan's AI work (searches, ratings, answers) is done by JobScan itself with the engine the user picked. Don't do that work in this session. You only drive and watch.
 - You never see job titles, companies, links or posting text, by design. Don't try to get them. If the user wants details, point them to JobScan's window.

@@ -1,6 +1,6 @@
 /**
  * The local endpoint the jobscan harness (an MCP server inside the user's
- * Claude Code) talks to, so a Claude Code session can drive JobScan's safe
+ * Claude Code or Codex) talks to, so that session can drive JobScan's safe
  * steps and hear what happens.
  *
  * Only this computer, only the holder of this launch's token:
@@ -97,6 +97,9 @@ export function startHarnessServer(deps: HarnessDeps, file: string): Promise<Har
       if (req.headers.origin !== undefined) return send(res, 403, { error: 'origin' })
       if (req.headers.host !== `127.0.0.1:${port}`) return send(res, 421, { error: 'host' })
       if (!tokenMatches(req.headers.authorization, token)) return send(res, 401, { error: 'token' })
+      // Any call from the driver shows it is there. A Codex session (no feed
+      // monitor) may only ever call status, actions and notes.
+      deps.feed.lastPollAt = Date.now()
       const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`)
       try {
         if (req.method === 'GET' && url.pathname === '/v1/status') {

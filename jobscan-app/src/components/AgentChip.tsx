@@ -5,9 +5,10 @@ interface Note { text: string; at: string; from: 'agent' | 'app' }
 interface HarnessStatus { enabled: boolean; connected: boolean; notes: Note[] }
 
 /**
- * Shown only while "Let Claude Code drive JobScan" is on: whether a Claude
- * Code session is listening, and what it has said or started. Notes are the
- * agent's own words, shown as plain text and labelled as such.
+ * Shown only while "Let Claude Code or Codex drive JobScan" is on: whether a
+ * Claude Code or Codex session has been in touch in the last minute, and
+ * what it has said or started. Notes are the agent's own words, shown as
+ * plain text and labelled as such.
  */
 export default function AgentChip() {
   const [status, setStatus] = useState<HarnessStatus | null>(null)
@@ -36,7 +37,7 @@ export default function AgentChip() {
   }, [open])
 
   if (!status?.enabled) return null
-  const label = status.connected ? 'Claude Code connected' : 'Waiting for Claude Code'
+  const label = status.connected ? 'Agent connected' : 'Waiting for your agent'
   return (
     <div ref={ref} className="relative shrink-0">
       <button
@@ -58,8 +59,8 @@ export default function AgentChip() {
         <div className="absolute right-0 mt-2 w-80 max-h-80 overflow-auto rounded-xl border border-white/[0.08] bg-[rgba(38,38,36,0.98)] p-3 shadow-xl z-50">
           <p className="text-xs text-gray-500 mb-2">
             {status.connected
-              ? 'A Claude Code session is driving JobScan. It can start a rebuild, find jobs, rate them and stop the loop. It cannot apply or change settings.'
-              : 'Open Claude Code and run /jobscan:jobscan to let it drive JobScan.'}
+              ? 'A Claude Code or Codex session is driving JobScan. It can start a rebuild, find jobs, rate them and stop the loop. It cannot apply or change settings.'
+              : 'Run /jobscan:jobscan in Claude Code, or $jobscan:jobscan in Codex, to let it drive JobScan.'}
           </p>
           {status.notes.length === 0 ? (
             <p className="text-xs text-gray-600">Nothing from your agent yet.</p>

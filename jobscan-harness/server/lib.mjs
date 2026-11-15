@@ -1,7 +1,8 @@
 /**
  * Shared by the jobscan MCP server (mcp.mjs) and the feed monitor (feed.mjs):
  * where JobScan's harness.json is, how to reach the local endpoint it names,
- * and the cleaning every reply goes through before any of it reaches Claude.
+ * and the cleaning every reply goes through before any of it reaches the
+ * session (Claude Code or Codex).
  *
  * JobScan already sends only numbers and fixed labels. Everything is checked
  * again here against the same rule, and anything else is dropped, so even a
@@ -17,7 +18,7 @@ import http from 'node:http'
 /** The only strings that pass: short lowercase labels (same rule as notices.ts). */
 export const LABEL = /^[a-z][a-z0-9_:-]{0,39}$/
 
-export const NOT_RUNNING = "JobScan is not running, or 'Let Claude Code drive JobScan' is off in Settings"
+export const NOT_RUNNING = "JobScan is not running, or 'Let Claude Code or Codex drive JobScan' is off in Settings"
 
 const APP_FOLDERS = ['jobscan-app', 'JobScan AI']
 const MAX_HANDLE_BYTES = 64 * 1024

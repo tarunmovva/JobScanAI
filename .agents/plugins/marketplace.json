@@ -1,0 +1,20 @@
+{
+  "name": "jobscan",
+  "interface": {
+    "displayName": "JobScan AI"
+  },
+  "plugins": [
+    {
+      "name": "jobscan",
+      "source": {
+        "source": "local",
+        "path": "./jobscan-harness"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

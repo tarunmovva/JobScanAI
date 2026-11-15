@@ -1,5 +1,5 @@
 /**
- * "Let Claude Code drive JobScan": the switch in Settings, and the glue
+ * "Let Claude Code or Codex drive JobScan": the switch in Settings, and the glue
  * between the local endpoint (harness-server.ts) and the app.
  *
  * Off by default. On, it:

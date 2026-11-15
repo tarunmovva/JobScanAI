@@ -1,0 +1,26 @@
+{
+  "name": "jobscan",
+  "version": "1.0.0",
+  "description": "Drive the JobScan AI desktop app from Codex: check its status, start its six safe steps, relay your requests, and hear what happens. Numbers and labels only; no job-posting text reaches the session.",
+  "author": {
+    "name": "Saitarun Movva"
+  },
+  "homepage": "https://github.com/tarunmovva/JobScanAI",
+  "repository": "https://github.com/tarunmovva/JobScanAI",
+  "license": "MIT",
+  "keywords": ["jobs", "job-search", "applications", "jobscan"],
+  "skills": "./skills/",
+  "mcpServers": "./.codex-mcp.json",
+  "interface": {
+    "displayName": "JobScan",
+    "shortDescription": "Drive the JobScan AI desktop app",
+    "longDescription": "Lets a Codex session drive JobScan AI on this computer: read where it is, start a database rebuild, find jobs, find more, rate them or stop the auto-apply loop, and hear what happens as numbers and labels. Applying, choosing jobs and settings stay in JobScan's window.",
+    "developerName": "Saitarun Movva",
+    "category": "Productivity",
+    "capabilities": ["Interactive"],
+    "websiteURL": "https://github.com/tarunmovva/JobScanAI",
+    "defaultPrompt": [
+      "Use $jobscan to tell me where JobScan stands."
+    ]
+  }
+}

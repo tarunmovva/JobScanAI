@@ -167,6 +167,20 @@ test('no token, a wrong token, a browser page, or a rebinding Host: refused', as
   } finally { await h.close() }
 })
 
+test('any call with the token marks the driver present; a refused one does not', async () => {
+  const { h, feed } = await harness()
+  try {
+    assert.equal((await request(h.port, { token: 'f'.repeat(64) })).status, 401)
+    assert.equal((await request(h.port, { token: h.token, headers: { origin: 'https://jobs.example.com' } })).status, 403)
+    assert.equal(feed.lastPollAt, 0, 'refused requests say nothing about the driver')
+    assert.equal((await request(h.port, { token: h.token })).status, 200)
+    assert.ok(feed.lastPollAt > 0, 'a status call (all a Codex session may make) counts')
+    feed.lastPollAt = 0
+    await request(h.port, { method: 'POST', path: '/v1/notes', token: h.token, body: { text: 'hello' } })
+    assert.ok(feed.lastPollAt > 0, 'a note counts too')
+  } finally { await h.close() }
+})
+
 test('actions, notes and notices go through; oversized or broken bodies do not', async () => {
   const { h, feed, notes, actions } = await harness()
   try {

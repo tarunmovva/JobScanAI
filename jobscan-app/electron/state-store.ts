@@ -19,7 +19,7 @@ interface StoreSchema {
   aiEngine?: string             // 'codex' (default) | 'claude' — which engine answers the AI calls (ai-engine.ts)
   claudeModel?: string          // '' = Claude Code's default; e.g. 'sonnet', 'opus', 'haiku'
   claudePath?: string           // optional: the Claude Code binary, when it is not found on its own
-  harnessEnabled?: boolean      // "Let Claude Code drive JobScan" (harness.ts), off by default
+  harnessEnabled?: boolean      // "Let Claude Code or Codex drive JobScan" (harness.ts), off by default
   codexModel: string            // '' = Auto — codex default / first-listed model
   codexPath?: string            // optional: the user's Codex CLI, when it is not found on its own (codex-locate.ts)
   jobscanExePath: string

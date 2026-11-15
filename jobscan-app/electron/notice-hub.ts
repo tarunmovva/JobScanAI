@@ -1,6 +1,6 @@
 /**
  * Where app events go besides the window: to the harness's notices, when a
- * Claude Code session is allowed to drive JobScan. A no-op otherwise.
+ * Claude Code or Codex session is allowed to drive JobScan. A no-op otherwise.
  *
  * Called at the top of every path that sends to the window (pipeline's
  * send(), the loop's status emit, safeSendError), so it fires even with no

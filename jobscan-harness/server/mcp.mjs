@@ -1,6 +1,7 @@
 /**
- * The jobscan MCP server: the four tools a Claude Code session uses to
- * drive JobScan AI through its local endpoint (see lib.mjs).
+ * The jobscan MCP server: the four tools a Claude Code or Codex session
+ * uses to drive JobScan AI through its local endpoint (see lib.mjs). Claude
+ * Code starts it from .mcp.json, Codex from .codex-mcp.json.
  *
  * stdio, newline-delimited JSON-RPC. stdout carries protocol messages only;
  * diagnostics go to stderr. Each tools/call runs on its own, so replies can
@@ -36,6 +37,7 @@ const TOOLS = [
       + 'counts of searches, job pool and rated jobs, the auto-apply loop, and the actions it accepts. '
       + 'Numbers and labels only. Call this first.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { title: 'JobScan status', readOnlyHint: true, openWorldHint: false },
     _meta: ALWAYS,
   },
   {
@@ -61,6 +63,7 @@ const TOOLS = [
       required: ['name'],
       additionalProperties: false,
     },
+    annotations: { title: 'Start a JobScan step', readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     _meta: ALWAYS,
   },
   {
@@ -72,11 +75,12 @@ const TOOLS = [
       required: ['text'],
       additionalProperties: false,
     },
+    annotations: { title: 'Note in JobScan', readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     _meta: ALWAYS,
   },
   {
     name: 'jobscan_wait',
-    description: 'Wait for JobScan notices. Use it when lines from the jobscan feed are not arriving. '
+    description: 'Wait for JobScan notices. Use it in Codex, or when lines from the jobscan feed are not arriving. '
       + 'Returns {notices, next, missed}: notices newer than `after` (omit it to start from now), '
       + 'waiting up to `seconds` (default 25, max 50) for the first. Pass `next` back as `after`. '
       + 'At most 100 notices per call; missed=true means some were skipped.',
@@ -88,6 +92,7 @@ const TOOLS = [
       },
       additionalProperties: false,
     },
+    annotations: { title: 'Wait for JobScan notices', readOnlyHint: true, openWorldHint: false },
     _meta: ALWAYS,
   },
 ]

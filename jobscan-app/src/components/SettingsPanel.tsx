@@ -340,12 +340,14 @@ export default function SettingsPanel({ onClose }: Props) {
                 onChange={e => void toggleHarness(e.target.checked)}
                 className="accent-orange-500"
               />
-              Let Claude Code drive JobScan
+              Let Claude Code or Codex drive JobScan
             </label>
             <p className="text-xs text-gray-500">
-              A Claude Code session with the JobScan plugin can then rebuild, find jobs, rate them and stop the loop,
+              A Claude Code or Codex session with the JobScan plugin can then rebuild, find jobs, rate them and stop the loop,
               and hears every step as it happens. It can never apply, change settings or open anything.
-              {harness.enabled && (harness.connected ? ' Connected now.' : ' Waiting: run /jobscan:jobscan in Claude Code.')}
+              {harness.enabled && (harness.connected
+                ? ' Connected now.'
+                : ' Waiting: run /jobscan:jobscan in Claude Code, or $jobscan:jobscan in Codex.')}
             </p>
             {harnessMsg && <p className="text-xs text-amber-400">{harnessMsg}</p>}
           </div>
