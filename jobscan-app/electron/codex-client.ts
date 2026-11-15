@@ -5,7 +5,7 @@ import fs from 'fs'
 import os from 'os'
 import { app } from 'electron'
 import store from './state-store'
-import { locateUserCodex } from './codex-locate'
+import { locateCodex, type LocateOptions, type LocatedCodex } from './codex-locate'
 import { threadStartParams, turnStartParams } from './codex-requests'
 import { CORE_METHODS, isProtocolError, createStartupCrashCounter } from './codex-health'
 import { warmBinary } from './binary-warmup'
@@ -34,23 +34,38 @@ const SHUTDOWN_GRACE_MS = 8_000  // wait for codex to checkpoint WAL + exit clea
 
 // ── Binary resolution ────────────────────────────────────────────────────────
 //
-// JobScan no longer ships Codex: it runs the user's own Codex CLI, found by
-// codex-locate.ts (the Settings path, then the npm install). The native
-// binary is spawned directly, never the codex.js launcher or the Windows
-// .cmd shim -- the launcher re-spawns the binary without windowsHide, which
-// opens a console window we cannot suppress.
+// JobScan no longer ships or downloads Codex: it runs the user's own Codex
+// CLI, found by codex-locate.ts (the Settings path, then the npm install) --
+// or, when that is older or missing, the copy an earlier JobScan downloaded
+// and verified in <userData>/codex. The native binary is spawned directly,
+// never the codex.js launcher or the Windows .cmd shim -- the launcher
+// re-spawns the binary without windowsHide, which opens a console window we
+// cannot suppress.
 
 export const CODEX_NOT_FOUND =
   'Codex CLI was not found. Install it with: npm install -g @openai/codex -- or switch to your Claude Code in Settings.'
 
-function resolveCodexNativeBinary(): string | null {
-  return locateUserCodex({
+function locateOptions(): LocateOptions {
+  const rejected = store.get('codexRejectedVersions') as unknown
+  return {
     setting: String(store.get('codexPath') ?? ''),
     env: process.env,
     platform: process.platform,
     arch: process.arch,
     homedir: os.homedir(),
-  })
+    legacyRoot: path.join(app.getPath('userData'), 'codex'),
+    legacyRejected: Array.isArray(rejected) ? rejected.map(String) : [],
+  }
+}
+
+function resolveCodexNativeBinary(): string | null {
+  return locateCodex(locateOptions())?.path ?? null
+}
+
+/** Which Codex runs, its version and where it came from (Settings shows it); null under e2e or when none. */
+export function codexInfo(): LocatedCodex | null {
+  if (e2eCodexCommand()) return null
+  return locateCodex(locateOptions())
 }
 
 /**
@@ -509,7 +524,8 @@ function startupCrashesFor(command: string): ReturnType<typeof createStartupCras
  * freezes the window. Never fails.
  */
 export function warmCodex(): Promise<void> {
-  const native = resolveCodexNativeBinary()
+  // getCodexBinaryPath: under e2e, never the user's real Codex, not even to warm it.
+  const native = getCodexBinaryPath()
   return native ? warmBinary(native) : Promise.resolve()
 }
 
@@ -555,6 +571,51 @@ export function reconcileSavedModel(availableIds: string[]): string | null {
 
 export async function listCodexModels(): Promise<CodexModelOption[]> {
   return getClient().listModels()
+}
+
+/**
+ * The model ids this Codex offers, asked of a throwaway app-server, as the
+ * old updater's check did. The shared client is not started, so nothing is
+ * left running -- a running codex.exe would also stop `npm i -g` from
+ * updating it on Windows. null when it cannot tell.
+ */
+export async function probeCodexModelIds(timeoutMs = 30_000): Promise<string[] | null> {
+  let spec: CodexSpawnSpec
+  try { spec = getCodexSpawnSpec(['app-server']) } catch { return null }
+  await warmCodex()
+  return new Promise(resolve => {
+    let child: ChildProcess
+    try {
+      child = spawn(spec.command, spec.args, { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'], shell: spec.shell, env: buildSpawnEnv() })
+    } catch { resolve(null); return }
+    let settled = false
+    const done = (ids: string[] | null): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { child.stdin?.end() } catch { /* gone */ }
+      try { child.kill() } catch { /* gone */ }
+      resolve(ids)
+    }
+    const timer = setTimeout(() => done(null), timeoutMs)
+    child.on('error', () => done(null))
+    child.on('close', () => done(null))
+    const send = (message: Record<string, unknown>): void => {
+      try { child.stdin?.write(JSON.stringify({ jsonrpc: '2.0', ...message }) + '\n') } catch { done(null) }
+    }
+    readline.createInterface({ input: child.stdout!, crlfDelay: Infinity }).on('line', line => {
+      let msg: Record<string, unknown>
+      try { msg = JSON.parse(line) as Record<string, unknown> } catch { return }
+      if (msg['id'] === 1) {
+        if (msg['error']) { done(null); return }
+        send({ method: 'initialized' })
+        send({ id: 2, method: 'model/list', params: { limit: 100 } })
+      } else if (msg['id'] === 2) {
+        done(msg['error'] ? null : parseModelListResult(msg['result']).map(m => m.id))
+      }
+    })
+    send({ id: 1, method: 'initialize', params: { clientInfo: { name: 'jobscan-app', version: '1.0.0' }, capabilities: { experimentalApi: true } } })
+  })
 }
 
 /**

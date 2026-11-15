@@ -12,7 +12,7 @@ import { setPipelineWindow, setState, isPipelineActive } from './pipeline'
 import { createLoop, type Loop } from './loop-runner'
 import { createLoopDeps } from './loop-deps'
 import type { LoopState } from '../src/types'
-import { clearCodexClient, checkAuth, listCodexModels, reconcileSavedModel } from './codex-client'
+import { clearCodexClient, checkAuth, probeCodexModelIds, reconcileSavedModel } from './codex-client'
 import { ensureProfiles, syncActiveSnapshot } from './profiles'
 import store from './state-store'
 import { createQuitGuard } from './quit-guard'
@@ -146,8 +146,10 @@ function createWindow(): void {
 // Keys from removed features (Auto-Apply scheduler, standalone search step);
 // scrubbed so old configs stay clean (delete of a missing key is a no-op).
 const REMOVED_KEYS = [
-  // The bundled Codex and its updater are gone (Codex is now the user's own CLI).
-  'codexAutoUpdate', 'codexManagedVersion', 'codexUpdateCheckedAt', 'codexRejectedVersions',
+  // The Codex updater is gone (Codex is now the user's own CLI). Its
+  // codexRejectedVersions stays: codex-locate still honours it for the copies
+  // that updater left in <userData>/codex.
+  'codexAutoUpdate', 'codexManagedVersion', 'codexUpdateCheckedAt',
   'automationEnabled', 'automationPaused', 'automationRunIntervalMin',
   'automationFetchIntervalMin', 'automationMinRating', 'automationMaxPerRun',
   'automationAutoPauseFailures', 'automationConsecutiveFailures',
@@ -192,9 +194,6 @@ app.whenReady().then(() => {
   // kept, so walking forward again re-emits cached results instantly.
   setState(claudeMode || checkAuth() ? 'resume' : 'auth')
   for (const key of REMOVED_KEYS) store.delete(key as never)
-  // The updater's downloaded Codex copies lived here; nothing uses them now.
-  // Only this app's own folder -- never the user's ~/.codex.
-  try { fs.rmSync(path.join(app.getPath('userData'), 'codex'), { recursive: true, force: true }) } catch { /* in use */ }
   ensureProfiles() // migrate first launch to a "Default" profile + crash-heal snapshot
   // Loop mode is always off at launch. A round still marked active means the
   // app went down mid-round without the quit handler (a crash): say so. The
@@ -225,14 +224,16 @@ app.whenReady().then(() => {
     return
   }
   // A saved Codex model the API has since withdrawn fails every turn: check it
-  // once, deferred and off the critical path, and reset it to Auto if gone.
-  // Never while a run is going (it starts the app-server); never in tests.
+  // once, deferred and off the critical path, with a throwaway app-server (as
+  // the updater's check did), and reset it to Auto if gone. Never while a run
+  // is going, signed out, in Claude mode or in tests.
+  const quiet = (): boolean =>
+    process.env['E2E_TEST'] !== '1' && !isPipelineActive() && store.get('aiEngine') !== 'claude' && checkAuth()
   setTimeout(() => {
-    if (process.env['E2E_TEST'] === '1' || isPipelineActive() || store.get('aiEngine') === 'claude') return
-    if (!String(store.get('codexModel') ?? '').trim()) return
-    listCodexModels()
-      .then(models => { reconcileSavedModel(models.map(m => m.id)) })
-      .catch(() => { /* no Codex, or signed out: the next turn says so */ })
+    if (!quiet() || !String(store.get('codexModel') ?? '').trim()) return
+    probeCodexModelIds()
+      .then(ids => { if (ids && quiet()) reconcileSavedModel(ids) })
+      .catch(() => { /* no Codex: the next turn says so */ })
   }, 15_000).unref?.()
 })
 

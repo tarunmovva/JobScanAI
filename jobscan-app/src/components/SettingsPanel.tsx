@@ -319,8 +319,15 @@ export default function SettingsPanel({ onClose }: Props) {
                 Codex CLI was not found. Install it with npm install -g @openai/codex (then sign in from the
                 login screen), set its path under Paths, or switch to your Claude Code above.
               </p>
+            ) : s.codexSource === 'legacy' ? (
+              <p className="text-xs text-gray-500">
+                Uses Codex {s.codexVersion}, the copy an earlier JobScan downloaded: it is newer than your own
+                Codex CLI, or you have none. JobScan no longer updates it -- install yours with npm install -g @openai/codex.
+              </p>
             ) : (
-              <p className="text-xs text-gray-500">Uses your own Codex CLI. Keep it current with npm install -g @openai/codex.</p>
+              <p className="text-xs text-gray-500">
+                Uses your Codex CLI{s.codexVersion ? ` ${s.codexVersion}` : ''}. Keep it current with npm install -g @openai/codex.
+              </p>
             )}
           </div>
           )}

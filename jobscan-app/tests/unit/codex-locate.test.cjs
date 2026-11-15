@@ -12,7 +12,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const { locateUserCodex, binaryFromPackage } = require(path.join(__dirname, '..', '..', 'out', 'unit', 'electron', 'codex-locate.js'))
+const { locateUserCodex, locateCodex, binaryFromPackage, legacyManagedCodex, codexVersionOf, compareVersions } = require(path.join(__dirname, '..', '..', 'out', 'unit', 'electron', 'codex-locate.js'))
 
 const TRIPLE = 'x86_64-pc-windows-msvc'
 
@@ -34,7 +34,9 @@ function install(prefix, { layout = 'nested', sub = 'bin', platform = 'win32' } 
   return { pkg, exe: path.join(exeDir, 'codex.exe') }
 }
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'codex-locate-'))
+// Real path: on macOS the temp folder is behind a link (/var -> /private/var),
+// and the locator returns real paths.
+const tmp = () => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'codex-locate-')))
 const opts = (over) => ({ setting: '', env: {}, platform: 'win32', arch: 'x64', homedir: os.homedir(), ...over })
 
 test('the nested npm layout (this machine) resolves to the native binary', () => {
@@ -88,4 +90,61 @@ test('this machine: a global Codex, when installed, is found', { skip: !process.
   if (!fs.existsSync(real)) return
   const found = locateUserCodex(opts({ env: process.env }))
   assert.ok(found && /codex\.exe$/i.test(found), String(found))
+})
+
+/** A copy the old updater left: <root>/<version>/package/vendor/<triple>/bin/codex.exe (+ .verified). */
+function legacyCopy(root, version, { verified = true, rejected = false } = {}) {
+  const dir = path.join(root, version, 'package')
+  const exeDir = path.join(dir, 'vendor', TRIPLE, 'bin')
+  fs.mkdirSync(exeDir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: '@openai/codex', version: `${version}-win32-x64` }))
+  fs.writeFileSync(path.join(exeDir, 'codex.exe'), 'MZ')
+  if (verified) fs.writeFileSync(path.join(root, version, '.verified'), '{}')
+  if (rejected) fs.writeFileSync(path.join(root, version, '.rejected'), '{}')
+  return path.join(exeDir, 'codex.exe')
+}
+
+test('versions compare by number, and are read from the package above the binary', () => {
+  assert.ok(compareVersions('0.167.0', '0.153.4') > 0)
+  assert.ok(compareVersions('0.153.4', '0.99.0') > 0)
+  assert.equal(compareVersions('0.167.0', '0.167.0'), 0)
+  const appdata = tmp()
+  const { exe } = install(path.join(appdata, 'npm'))
+  assert.equal(codexVersionOf(exe), '0.153.4')
+  assert.equal(codexVersionOf(legacyCopy(tmp(), '0.167.0')), '0.167.0')
+  const bare = path.join(tmp(), 'codex.exe')
+  fs.writeFileSync(bare, 'MZ')
+  assert.equal(codexVersionOf(bare), null)
+})
+
+test("an earlier JobScan's copy: newest verified, never unverified or rejected", () => {
+  const root = tmp()
+  legacyCopy(root, '0.155.1')
+  const v167 = legacyCopy(root, '0.167.0')
+  legacyCopy(root, '0.167.2', { verified: false })     // never finished its health check
+  legacyCopy(root, '0.169.0', { verified: false })
+  assert.deepEqual(legacyManagedCodex(root, 'win32', 'x64'), { path: v167, version: '0.167.0' })
+  assert.equal(legacyManagedCodex(root, 'win32', 'x64', ['0.167.0']).version, '0.155.1', 'the rejected list is honoured')
+  legacyCopy(root, '0.170.0', { rejected: true })
+  assert.equal(legacyManagedCodex(root, 'win32', 'x64').version, '0.167.0', 'a .rejected marker is honoured')
+  assert.equal(legacyManagedCodex(path.join(root, 'missing'), 'win32', 'x64'), null)
+})
+
+test('upgrading never moves anyone to an older Codex, or leaves them with none', () => {
+  // This machine: own npm Codex 0.153.4, an earlier JobScan's verified 0.167.0.
+  const appdata = tmp()
+  const own = install(path.join(appdata, 'npm')).exe
+  const root = tmp()
+  const v167 = legacyCopy(root, '0.167.0')
+  assert.deepEqual(locateCodex(opts({ env: { APPDATA: appdata }, legacyRoot: root })), { path: v167, version: '0.167.0', source: 'legacy' })
+  // Their own Codex catches up (or overtakes): it is used from then on.
+  const older = tmp()
+  legacyCopy(older, '0.150.0')
+  assert.deepEqual(locateCodex(opts({ env: { APPDATA: appdata }, legacyRoot: older })), { path: own, version: '0.153.4', source: 'own' })
+  // No Codex of their own: the earlier copy keeps them working.
+  assert.equal(locateCodex(opts({ env: {}, legacyRoot: root })).source, 'legacy')
+  // A path the user set wins outright.
+  assert.equal(locateCodex(opts({ env: { APPDATA: appdata }, legacyRoot: root, setting: own })).source, 'setting')
+  // Nothing anywhere: null, so the app can say how to install it.
+  assert.equal(locateCodex(opts({ env: {}, legacyRoot: tmp() })), null)
 })

@@ -86,9 +86,11 @@ export function localDay(now: Date): string {
 export function isCodexLimit(text: string): boolean {
   const t = String(text ?? '')
   if (/usage[ _]?limit|usageLimitExceeded/i.test(t)) return true
-  // Claude Code's own wording: "spend limit reached", "You've hit your limit".
-  if (/Claude/.test(t) && /spend[ _]?limit|hit your limit/i.test(t)) return true
-  return /codex|claude/i.test(t) && /rate[ _]?limit/i.test(t)
+  // Claude Code's own wording ("spend limit reached", "You've hit your
+  // limit"), only as the Claude engine reports it -- "Claude: ..." -- so a
+  // form's text that merely mentions Claude can never stop a Codex round.
+  if (/Claude: [^\n]*?(spend[ _]?limit|hit your limit|[Rr]ate[ _]?[Ll]imit)/.test(t)) return true
+  return /codex/i.test(t) && /rate[ _]?limit/i.test(t)
 }
 
 /**
@@ -100,6 +102,7 @@ export function isCodexFailure(text: string): boolean {
   const t = String(text ?? '')
   return isCodexLimit(t)
     || /Codex exited/i.test(t)
+    || /Codex CLI was not found/i.test(t)
     || /Claude exited/i.test(t)
     || /Claude: Not logged in/i.test(t)
     || /Claude: Claude Code was not found/i.test(t)

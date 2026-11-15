@@ -20,7 +20,7 @@ import { noticeEvent } from './notice-hub'
 import {
   wasInterrupted, abandonSql, landingState, RUN_STATE_KEYS,
 } from './interrupted-run'
-import { jobContextSql, jobContextFromRows } from './job-context-sql'
+import { jobContextSql, jobContextFromRows, retryQuickFailures } from './job-context-sql'
 import { appliedKeys, isApplied, jobKey } from './applied-jobs'
 import { applyBoardEvent, seedCards, emptyBoard, waitingCards, cardsNotStarted, type Board, type JobRef } from './board-state'
 import { shouldAgentExit, AGENT_POLL_MS } from './agent-loop'
@@ -1310,7 +1310,12 @@ async function getJobContext(jobId: string, platform: string): Promise<{ title: 
   try {
     // Asynchronous: this once ran as spawnSync per job, on the main process,
     // and the window could not draw a frame until the answer came.
-    const rows = await cliDbQuery(jobContextSql(jobId, platform), undefined, JOB_CONTEXT_TIMEOUT_MS)
+    // Retried after a quick failure: the board's other jobscan processes can
+    // hold the database for a moment (SQLITE_BUSY), and the CLI does not wait.
+    const rows = await retryQuickFailures(
+      () => cliDbQuery(jobContextSql(jobId, platform), undefined, JOB_CONTEXT_TIMEOUT_MS),
+      { attempts: 3, delayMs: 1_500, quickMs: 5_000 },
+    )
     if (rows === null) {
       // This returned empties for every job for the life of the feature,
       // because the SQL named a column the schema does not have. Nothing

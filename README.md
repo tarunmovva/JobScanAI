@@ -177,7 +177,7 @@ flowchart LR
 
 - **No key and no meter.** Signing in with ChatGPT means the work counts against a plan you already pay for, with nothing extra to set up or bill.
 - **One process, many threads.** `codex-client.ts` starts `codex app-server` once and keeps it running. Each query, rating batch or set of answers gets its own `thread/start` with `ephemeral: true`, `sandbox: "read-only"` and `approvalPolicy: "never"`, so no task ever sees another task's context. Turns run at `effort: "medium"` with `summary: "none"`, which skips paying for reasoning summaries nobody reads.
-- **Your own Codex, found where npm put it.** Nothing is bundled: `codex-locate.ts` finds the native binary inside your global `@openai/codex` install (nested or flat npm layout) the way `codex.js` does, or uses the path you set in Settings. Keep it current with `npm install -g @openai/codex`.
+- **Your own Codex, found where npm put it.** Nothing is bundled or downloaded: `codex-locate.ts` finds the native binary inside your global `@openai/codex` install (nested or flat npm layout) the way `codex.js` does, or uses the path you set in Settings. Keep it current with `npm install -g @openai/codex`; Settings shows the version in use. If you used an earlier JobScan, the Codex it downloaded for itself stays in use while it is newer than yours (or you have none), so upgrading never moves you to an older Codex; once yours catches up, yours is used.
 - **No console flash on Windows.** The app runs the native `codex.exe` directly rather than through the `codex.js` wrapper or the `.cmd` shim, so its `windowsHide` setting takes effect. It also runs a new binary once in a worker thread first (`binary-warmup.ts`): an antivirus scan of a never-seen `codex.exe` froze the window for 11 seconds before this fix.
 
 </details>
@@ -622,7 +622,7 @@ The AI work itself (searches, ratings, answers) is still done by JobScan with th
 
 ## 💸 Built to save cost
 
-All AI usage counts against your Codex allowance, so the app is designed to spend as little of it as possible at every step:
+All AI usage counts against your plan (your Codex allowance, or your Claude plan), so the app is designed to spend as little of it as possible at every step:
 
 | Where | What it does | Why it matters |
 |---|---|---|
@@ -791,10 +791,11 @@ jobscan-ai/
 │   │   └── queryparser/             the Boolean query language
 │   ├── data/                        the ~13,700 board lists
 │   └── job_application_automator/   extractors, fillers, OTP, repair agent, form tools
-└── jobscan-app/                     Electron + React desktop app
-    ├── electron/                    pipeline, rating engine, loop conductor & policy, Codex client/updater
-    ├── src/                         screens and components
-    └── tests/                       unit (node --test) and e2e (Playwright)
+├── jobscan-app/                     Electron + React desktop app
+│   ├── electron/                    pipeline, rating engine, loop conductor & policy, AI engines (Codex, Claude Code), harness
+│   ├── src/                         screens and components
+│   └── tests/                       unit (node --test) and e2e (Playwright)
+└── jobscan-harness/                 Claude Code plugin: drive JobScan from a Claude Code session
 ```
 
 ### Status

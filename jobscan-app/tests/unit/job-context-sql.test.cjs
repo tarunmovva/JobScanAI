@@ -23,7 +23,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const {
-  JOB_CONTEXT_COLUMNS, DESCRIPTION_LIMIT, jobContextSql, jobContextFromRows,
+  JOB_CONTEXT_COLUMNS, DESCRIPTION_LIMIT, jobContextSql, jobContextFromRows, retryQuickFailures,
 } = require('../../out/unit/electron/job-context-sql.js')
 
 // This checkout's CLI; jobs.db sits beside it (cli-runner.getDbPath()).
@@ -87,4 +87,36 @@ test('the column it used to select really is absent', (t) => {
   // than discovering the ambiguity through silently empty prompts.
   const r = query('SELECT company FROM jobs LIMIT 1')
   assert.match(r.stderr || '', /no such column: company/)
+})
+
+// On the board, extraction and form answers open jobs.db at the same moments,
+// and the CLI fails at once with SQLITE_BUSY instead of waiting. One such
+// collision sent a payload prompt out with no job description (seen in a
+// real run). A quick failure is retried; a slow one (the timeout) is not.
+test('a quick failure (a locked database) is retried; rows end it', async () => {
+  let clock = 0
+  const answers = [null, null, [{ title: 'x' }]]
+  const waits = []
+  const rows = await retryQuickFailures(async () => { clock += 100; return answers.shift() }, {
+    attempts: 3, delayMs: 1500, quickMs: 5000, now: () => clock, sleep: async ms => { waits.push(ms) },
+  })
+  assert.deepEqual(rows, [{ title: 'x' }])
+  assert.deepEqual(waits, [1500, 1500])
+})
+
+test('it gives up after the last attempt, and never retries a slow failure', async () => {
+  let calls = 0
+  let clock = 0
+  const quick = await retryQuickFailures(async () => { calls++; clock += 100; return null }, {
+    attempts: 3, delayMs: 10, quickMs: 5000, now: () => clock, sleep: async () => {},
+  })
+  assert.equal(quick, null)
+  assert.equal(calls, 3)
+
+  calls = 0
+  const slow = await retryQuickFailures(async () => { calls++; clock += 30_000; return null }, {
+    attempts: 3, delayMs: 10, quickMs: 5000, now: () => clock, sleep: async () => {},
+  })
+  assert.equal(slow, null)
+  assert.equal(calls, 1)
 })

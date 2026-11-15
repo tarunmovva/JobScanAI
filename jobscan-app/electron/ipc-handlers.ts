@@ -6,7 +6,7 @@ import { isOpenableRecordFile } from './record-files'
 import { appliedKeys, isApplied } from './applied-jobs'
 import {
   clearCodexClient, getCodexSpawnSpec, buildSpawnEnv, listCodexModels, codexLoginStatus, warmCodex,
-  reconcileSavedModel, codexInstalled,
+  reconcileSavedModel, codexInstalled, codexInfo,
 } from './codex-client'
 import { focusApplicationTab } from './chrome-tabs'
 import { automatorPython } from './cli-runner'
@@ -514,6 +514,7 @@ export function registerIpcHandlers(): void {
     claudeFound: claudeBinary() !== null,
     codexPath: store.get('codexPath') ?? '',
     codexFound: codexInstalled(),
+    ...(() => { const c = codexInfo(); return { codexVersion: c?.version ?? '', codexSource: c?.source ?? '' } })(),
   }))
 
   ipcMain.handle('settings:save', async (_e, partial: Record<string, unknown>) => {
@@ -524,7 +525,7 @@ export function registerIpcHandlers(): void {
       // the whole save reject and left the Settings panel stuck open.
       if (v === undefined) continue
       // The engine changes only through engine:set, which refuses mid-run.
-      if (k === 'aiEngine' || k === 'claudeFound' || k === 'codexFound') continue
+      if (k === 'aiEngine' || k === 'claudeFound' || k === 'codexFound' || k === 'codexVersion' || k === 'codexSource') continue
       store.set(k as never, v as never)
     }
     // Note: previously called clearCodexClient() to handle API-key rotation.

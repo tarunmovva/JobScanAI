@@ -370,3 +370,18 @@ test('with no reset known, the wait backs off and caps at a day', () => {
   assert.deepEqual(hours, [1, 2, 4, 8, 16, 24, 24])
   assert.equal(codexWaitUntil({ snap: null, errorText: '', now: NOW, backoffStep: 2 }).nextBackoffStep, 3)
 })
+
+test('a form that merely mentions Claude never stops a Codex round', () => {
+  // Reviewer's case: a filler's own failure text that names Claude. On main
+  // this was 'retryable'; it must not read as an AI usage limit.
+  assert.equal(isCodexLimit('failed: Rate limit exceeded on question "Why do you want to work at Claude?"'), false)
+  assert.equal(isCodexLimit('Claude hit your limit of characters for this answer'), false)
+  // The Claude engine's own reports still do.
+  assert.equal(isCodexLimit("Error: Claude: You've hit your limit · resets 5pm"), true)
+  assert.equal(isCodexLimit('Claude: spend limit reached'), true)
+  assert.equal(isCodexLimit('Claude: rate limit exceeded'), true)
+})
+
+test('no Codex installed is the engine failing, not the job', () => {
+  assert.equal(isCodexFailure('Error: Codex CLI was not found. Install it with: npm install -g @openai/codex'), true)
+})

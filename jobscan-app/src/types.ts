@@ -102,6 +102,8 @@ export interface Settings {
   claudeFound?: boolean        // read-only: Claude Code was found on this machine
   codexPath?: string           // optional path to the Codex CLI when it is not found on its own
   codexFound?: boolean         // read-only: the Codex CLI was found on this machine
+  codexVersion?: string        // read-only: the version of the Codex that runs, '' when unknown
+  codexSource?: '' | 'setting' | 'env' | 'own' | 'legacy'  // read-only: where that Codex came from
   jobscanExePath: string
   pythonDir: string
   jobAutomatorHome: string

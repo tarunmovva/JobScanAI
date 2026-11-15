@@ -95,6 +95,26 @@ class GuardTests(unittest.TestCase):
         self.assertIn("upload refused", upload_guard.refusal(self.job_dir / "missing.pdf"))
         self.assertIn("upload refused", upload_guard.refusal("~/.codex/auth.json"))
 
+    def test_long_path_prefix_and_unresolvable_drives_still_allow_the_resume(self):
+        self.arm()
+        if sys.platform == "win32":
+            self.assertEqual(upload_guard.refusal("\\\\?\\" + str(self.resume)), "")
+        # A drive that cannot report a final path: resolve() fails, the file exists.
+        real_resolve = Path.resolve
+
+        def failing(self_path, strict=False):
+            if strict:
+                raise OSError("this drive cannot report a final path")
+            return real_resolve(self_path, strict=strict)
+        Path.resolve = failing
+        try:
+            self.arm()
+            self.assertEqual(upload_guard.refusal(self.resume), "")
+            self.assertEqual(upload_guard.refusal(self.letter), "")
+            self.assertIn("upload refused", upload_guard.refusal(self.secret))
+        finally:
+            Path.resolve = real_resolve
+
     def test_an_empty_resume_path_still_allows_job_folder_files_only(self):
         upload_guard.configure({"resume_path": ""}, (self.job_dir,))
         self.assertEqual(upload_guard.refusal(self.letter), "")

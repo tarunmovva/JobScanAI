@@ -4,7 +4,7 @@
  */
 import store from './state-store'
 import {
-  runCodexThread, clearCodexClient, codexLoginStatus, checkAuth, readRateLimits,
+  runCodexThread, clearCodexClient, codexLoginStatus, checkAuth, readRateLimits, codexInstalled,
 } from './codex-client'
 import { codexHashModel, type AiEngine } from './ai-engine'
 
@@ -13,7 +13,8 @@ export function createCodexEngine(): AiEngine {
     id: 'codex',
     complete: call => runCodexThread(call.system, call.user, call.onToken),
     hashModel: () => codexHashModel(k => store.get(k)),
-    ready: async () => (await codexLoginStatus()) ?? checkAuth(),
+    // No Codex to run is not ready, whatever auth.json says (the loop must not start).
+    ready: async () => codexInstalled() && ((await codexLoginStatus()) ?? checkAuth()),
     limits: () => readRateLimits(),
     // Awaited so the next call cannot race a still-alive codex.exe holding
     // the SQLite WAL (see cancelActivePipeline).

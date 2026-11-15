@@ -41,3 +41,27 @@ export function jobContextFromRows(rows: unknown): { title?: string; company?: s
     description: text(r['description_plain']).slice(0, DESCRIPTION_LIMIT),
   }
 }
+
+/**
+ * Runs `query` again after a quick failure, up to `attempts` times in all.
+ *
+ * On the board, extraction and form answers run side by side, and their
+ * jobscan processes open jobs.db at the same moments. The CLI fails at once
+ * with SQLITE_BUSY ("database is locked") instead of waiting, and one such
+ * collision used to send a payload prompt out with no job description. A
+ * slow failure (the query's own timeout) is not retried: it would only wait
+ * again.
+ */
+export async function retryQuickFailures<T>(
+  query: () => Promise<T | null>,
+  opts: { attempts: number; delayMs: number; quickMs: number; now?: () => number; sleep?: (ms: number) => Promise<void> },
+): Promise<T | null> {
+  const now = opts.now ?? Date.now
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)))
+  for (let attempt = 1; ; attempt++) {
+    const started = now()
+    const result = await query()
+    if (result !== null || attempt >= opts.attempts || now() - started > opts.quickMs) return result
+    await sleep(opts.delayMs)
+  }
+}

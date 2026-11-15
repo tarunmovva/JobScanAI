@@ -19,6 +19,7 @@ and keeps the old behaviour.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -31,14 +32,33 @@ class _Policy:
         self.roots = roots
 
 
+def _plain(text: str) -> str:
+    """The path without Windows' long-path prefix, so both spellings compare equal."""
+    if text.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + text[8:]
+    if text.startswith("\\\\?\\"):
+        return text[4:]
+    return text
+
+
 def _resolve(value: Any) -> Path | None:
-    text = str(value or "").strip()
+    text = _plain(str(value or "").strip())
     if not text:
         return None
+    path = Path(text).expanduser()
     try:
-        return Path(text).expanduser().resolve(strict=True)
+        return Path(_plain(str(path.resolve(strict=True))))
     except (OSError, RuntimeError):
-        return None
+        pass
+    # Some drives cannot report a file's final path (RAM disks, rclone/WinFsp
+    # mounts, some SMB shares): an existing file is then compared by its
+    # absolute, case-folded path, rather than refused.
+    try:
+        if path.exists():
+            return Path(os.path.normcase(os.path.abspath(path)))
+    except OSError:
+        pass
+    return None
 
 
 def configure(payload: dict[str, Any], roots: Iterable[Any]) -> bool:

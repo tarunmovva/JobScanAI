@@ -232,9 +232,9 @@ def _timeout_s() -> float:
 def _resolve_codex() -> list[str] | None:
     """Resolve codex into an argv prefix.
 
-    JOB_AUTOMATOR_CODEX_BIN wins when set: the app auto-updates the Codex CLI
-    into its own userData dir and passes the resolved path down, so recovery
-    runs on the SAME binary as the app-server side. Falling through to PATH
+    JOB_AUTOMATOR_CODEX_BIN wins when set: the app passes down the Codex it
+    runs itself (the user's own CLI, or a copy an earlier JobScan downloaded),
+    so recovery runs on the SAME binary as the app-server side. Falling through to PATH
     would silently split the two surfaces across versions — and a version skew
     only shows up when a fill fails, which is the worst time to discover it.
 
@@ -255,8 +255,10 @@ def _resolve_codex() -> list[str] | None:
 
     pkg = Path(found).parent / "node_modules" / "@openai" / "codex"
     if pkg.is_dir():
-        for exe in sorted(pkg.glob("node_modules/@openai/codex-*/vendor/*/codex/codex.exe")):
-            return [str(exe)]
+        # The binary moved from vendor/<triple>/codex/ to vendor/<triple>/bin/ in 0.153.
+        for sub in ("bin", "codex"):
+            for exe in sorted(pkg.glob(f"node_modules/@openai/codex-*/vendor/*/{sub}/codex.exe")):
+                return [str(exe)]
         cli = pkg / "bin" / "codex.js"
         node = shutil.which("node")
         if cli.exists() and node:

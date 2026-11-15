@@ -52,12 +52,14 @@ const SEARCH_SHORTHANDS: ReadonlyMap<string, boolean> = new Map([['d', false], [
  * Why these AI-written search tokens must not run, or null when they may.
  * Reads them the way the CLI's flag parser does: `--flag=value`, a flag's
  * value in the next token (even one starting with '-'), clustered
- * single-letter switches (`-dQ value`), and `--` ending the flags.
+ * single-letter switches (`-dQ value`, `-d=true`); `--` is refused.
  */
 export function searchFlagProblem(tokens: readonly string[]): string | null {
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i]!
-    if (token === '--') return null
+    // `--` ends the flags: the app's own --format/--count after it would be
+    // read as search words, and the output could not be parsed.
+    if (token === '--') return 'Search flag -- is not allowed; use only search filters such as --title-query, --key-query, --market or --since'
     if (token.startsWith('--')) {
       const eq = token.indexOf('=')
       const name = eq === -1 ? token : token.slice(0, eq)
@@ -68,6 +70,7 @@ export function searchFlagProblem(tokens: readonly string[]): string | null {
     }
     if (token.startsWith('-') && token.length > 1) {
       for (let c = 1; c < token.length; c++) {
+        if (token[c] === '=' && c > 1) break     // -d=true: the switch's own value
         const takesValue = SEARCH_SHORTHANDS.get(token[c]!)
         if (takesValue === undefined) return `Search flag -${token[c]} is not allowed; use only search filters such as --title-query, --key-query, --market or --since`
         if (takesValue) {

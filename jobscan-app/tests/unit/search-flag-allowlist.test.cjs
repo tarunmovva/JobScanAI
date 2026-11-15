@@ -44,12 +44,21 @@ test('flags that open or write files, or change the output, are refused', () => 
   refused('--title-query x --help', '--help')
   refused('--title-query x -h', '-h')
   refused('--title-query x --not-a-flag 1', '--not-a-flag')
+  refused('--title-query x -=', '-=')
+})
+
+test('`--` is refused: the app\'s own flags after it would become search words', () => {
+  for (const flags of ['--market usa -- --db x', '--title-query x --', '-- backend']) {
+    const problem = searchFlagProblem(tokenizeQueryFlags(flags))
+    assert.ok(problem && problem.startsWith('Search flag -- '), `${flags} -> ${problem}`)
+  }
 })
 
 test("a flag's value is never read as a flag, as the CLI reads it", () => {
   ok(`--title-query --db`)            // --db is the title query's value
   ok(`-Q -o`)                         // so is -o here
-  ok(`--market usa -- --db x`)        // after --, everything is search text
+  ok(`--title-query x -d=true`)       // a switch with its own value, as the CLI accepts
+  ok(`-d=false --market usa`)
 })
 
 test('a saved search with a refused flag is skipped, and the rest still run', async () => {
