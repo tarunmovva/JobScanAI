@@ -462,9 +462,12 @@ export function createLoop(deps: LoopDeps): Loop {
     current = null
     r.rec.endedAt = now.toISOString()
     r.rec.skipped += r.skippedKeys.size
+    // Counted even when 0: the round's row can then say "not started" for the
+    // rest, where older rounds can only say "not finished".
+    r.rec.cutOff ??= 0
     // A fill that started and never reported -- however the round ended --
     // may have gone in: excluded, never picked again.
-    if (Object.keys(state.inFlight ?? {}).length > 0) cutOffFills()
+    if (Object.keys(state.inFlight ?? {}).length > 0) cutOffFills(r)
 
     if (end.kind === 'precondition') {
       // The round never started; nothing to record.
@@ -542,7 +545,11 @@ export function createLoop(deps: LoopDeps): Loop {
   }
 
   /** Fills under way when a round was cut off may already have gone in. */
-  function cutOffFills(): void {
+  // `r` is the round the fills belong to: it records how many were cut off,
+  // so its row can tell them (may have gone in) from jobs that never started.
+  function cutOffFills(r: Round | null): void {
+    const swept = Object.keys(state.inFlight ?? {}).length
+    if (r && swept > 0) r.rec.cutOff = (r.rec.cutOff ?? 0) + swept
     const urls = [...liveFills.values()].map(j => j.apply_url ?? '').filter(Boolean)
     liveFills.clear()
     state = sweepInterrupted(state, deps.now())
@@ -557,7 +564,7 @@ export function createLoop(deps: LoopDeps): Loop {
     if (current !== r || r.halted) return
     r.halted = 'timeout'
     try { await deps.cancelPipeline('loop:round-timeout') } catch { /* already gone */ }
-    cutOffFills()
+    cutOffFills(r)
     r.abort()
   }
 
@@ -712,7 +719,7 @@ export function createLoop(deps: LoopDeps): Loop {
     if (r) r.halted = 'stop'
     emit()
     try { await deps.cancelPipeline('loop:stop-now') } catch { /* already gone */ }
-    cutOffFills()
+    cutOffFills(r ?? null)
     r?.abort()
   }
 

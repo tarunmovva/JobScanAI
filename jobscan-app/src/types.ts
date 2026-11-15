@@ -207,6 +207,12 @@ export interface RoundRecord {
   skipped: number
   error?: string
   codexLimit?: boolean
+  /**
+   * Fills that had started when the round was cut off (Stop now, a timeout)
+   * and never reported: they may have gone in. The rest of the picked jobs
+   * without a result never started. Absent on rounds recorded before this.
+   */
+  cutOff?: number
   /** The round got through its searches — the next round's new-postings pass starts from here. */
   searched?: boolean
 }

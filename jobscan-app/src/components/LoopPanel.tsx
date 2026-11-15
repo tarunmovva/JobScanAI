@@ -1,8 +1,79 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { ipc } from '../ipc'
 import ConfirmDialog from './ConfirmDialog'
-import { CHIP_LEGEND, chipLabel, startConfirmCopy } from '../../electron/loop-copy'
-import type { LoopSettings, LoopStatus } from '../types'
+import { CHIP_LEGEND, chipLabel, roundLines, roundsTotal, startConfirmCopy, type RoundTone } from '../../electron/loop-copy'
+import type { LoopSettings, LoopStatus, RoundRecord } from '../types'
+
+// The app's palette (tailwind.config.js): sent is the sage used for
+// confirmations, failed the board's FAIL brick, and only "cut off" gets the
+// saturated orange -- it may have gone in, so it is the one that needs you.
+// A job that never started is a hollow mark: nothing was attempted.
+const TONE: Record<RoundTone, { text: string; mark: string }> = {
+  sent:       { text: 'text-green-300',  mark: 'bg-green-400' },
+  cutoff:     { text: 'text-orange-400', mark: 'bg-orange-400' },
+  failed:     { text: 'text-[#d0806f]',  mark: 'bg-[#a1382f]' },
+  skipped:    { text: 'text-gray-400',   mark: 'bg-gray-500' },
+  unfinished: { text: 'text-gray-500',   mark: 'border border-gray-500' },
+}
+const MARKS_SHOWN = 60
+
+// One row per round, quiet stretches folded together. Each picked job is one
+// mark, colored by what became of it; the words beside them are the key.
+function Rounds({ history }: { history: RoundRecord[] }) {
+  const lines = roundLines(history, new Date())
+  return (
+    <div className="flex flex-col gap-2" data-testid="loop-rounds">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Last rounds</p>
+        <p className="text-xs text-gray-500 tabular-nums">{roundsTotal(history)}</p>
+      </div>
+      <ol className="flex flex-col">
+        {lines.map((l, i) => {
+          const marks = l.outcome.flatMap(o => Array.from({ length: o.count }, () => o.tone))
+          return (
+            <Fragment key={l.key}>
+              {(i === 0 || lines[i - 1].day !== l.day) && (
+                <li className={`text-xs text-gray-400 pb-1 ${i === 0 ? '' : 'pt-3'}`} aria-hidden>{l.day}</li>
+              )}
+              <li title={l.tooltip} className="grid grid-cols-[5.75rem_1fr] gap-x-3 py-1.5 border-t border-white/[0.05]">
+                <span className="text-xs tabular-nums text-gray-500 leading-5">{l.time}</span>
+                {l.quiet ? (
+                  <span className="text-xs text-gray-500 leading-5">{l.detail}</span>
+                ) : (
+                  <div className="flex flex-col gap-1.5 min-w-0">
+                    <div className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap text-sm leading-5">
+                      {l.outcome.map(o => (
+                        <span key={o.tone} className={`${TONE[o.tone].text} font-medium tabular-nums`}>{o.text}</span>
+                      ))}
+                      {/* Nothing picked: the reason the round ended is the headline. */}
+                      {l.outcome.length === 0 && l.note && (
+                        <span className={l.noteIsError ? 'text-amber-300' : 'text-gray-400'}>{l.note}</span>
+                      )}
+                      {l.detail && <span className="text-xs text-gray-500 ml-auto">{l.detail}</span>}
+                    </div>
+                    {marks.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-[3px]" aria-hidden>
+                        {marks.slice(0, MARKS_SHOWN).map((tone, k) => (
+                          <span key={k} className={`h-2 w-2 rounded-[2px] ${TONE[tone].mark}`} />
+                        ))}
+                        {marks.length > MARKS_SHOWN && (
+                          <span className="text-[10px] text-gray-500 pl-1 tabular-nums">+{marks.length - MARKS_SHOWN}</span>
+                        )}
+                      </div>
+                    )}
+                    {l.outcome.length > 0 && l.note && (
+                      <p className={`text-xs ${l.noteIsError ? 'text-amber-300' : 'text-gray-500'}`}>{l.note}</p>
+                    )}
+                  </div>
+                )}
+              </li>
+            </Fragment>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
 
 const REASON_TEXT: Record<string, string> = {
   captcha: 'CAPTCHA',
@@ -205,39 +276,7 @@ export default function LoopPanel({ status, onClose }: { status: LoopStatus | nu
         )}
 
         {/* ── rounds ── */}
-        {status && status.history.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Last rounds</p>
-            <table className="text-xs text-gray-300 w-full">
-              <thead className="text-gray-500">
-                <tr>
-                  <th className="text-left font-normal">Started</th>
-                  <th className="text-right font-normal">New</th>
-                  <th className="text-right font-normal">Rated</th>
-                  <th className="text-right font-normal">Picked</th>
-                  <th className="text-right font-normal">Sent</th>
-                  <th className="text-right font-normal">Failed</th>
-                  <th className="text-right font-normal">Skipped</th>
-                  <th className="text-left font-normal pl-2">Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {status.history.map(r => (
-                  <tr key={r.startedAt}>
-                    <td>{time(r.startedAt)}</td>
-                    <td className="text-right">{r.newJobs}</td>
-                    <td className="text-right">{r.newlyRated}</td>
-                    <td className="text-right">{r.selected}</td>
-                    <td className="text-right">{r.submitted}</td>
-                    <td className="text-right">{r.failed}</td>
-                    <td className="text-right">{r.skipped}</td>
-                    <td className={`pl-2 ${r.error && !r.codexLimit ? 'text-amber-300' : 'text-gray-500'}`}>{r.error ?? ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {status && status.history.length > 0 && <Rounds history={status.history} />}
 
         {/* ── legend ── */}
         <div className="flex flex-col gap-1.5">

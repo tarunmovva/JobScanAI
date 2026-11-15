@@ -141,6 +141,7 @@ test('a round runs rebuild, search, rate, apply in that order, best jobs first',
   assert.equal(h.stored.state.history.length, 1)
   assert.equal(h.stored.state.history[0].selected, 2)
   assert.equal(h.stored.state.history[0].searched, true)
+  assert.equal(h.stored.state.history[0].cutOff, 0, 'counted even when nothing was cut off')
 })
 
 test('the first round has no new-postings pass; later rounds pass the previous start date', async () => {
@@ -352,10 +353,13 @@ test('a round past 3 hours is cancelled and fails', async () => {
   const loop = createLoop(h.deps)
   await loop.start()
   await held.entered.promise
+  h.hooks.onFillStart({ platform: 'lever', job_id: 'a', apply_url: 'https://jobs.lever.co/co/a' })
   h.fireNext()   // the only timer during a round: its deadline
   await h.settled('timed-out round')
   assert.deepEqual(h.cancels, ['loop:round-timeout'])
   assert.equal(h.stored.state.history[0].error, 'Round took longer than 3 hours')
+  // Swept before the round ends, and still credited to it.
+  assert.equal(h.stored.state.history[0].cutOff, 1)
   assert.equal(h.phase(), 'waiting')
 })
 
@@ -537,6 +541,9 @@ test('stop now cancels the pipeline, excludes and closes jobs that were filling'
   await until(() => h.phase() === 'off', 'off')
   assert.deepEqual(h.cancels, ['loop:stop-now'])
   assert.equal(h.stored.state.excluded['lever:a'].reason, 'interrupted')
+  // The round's row tells this fill (it may have gone in) from picked jobs
+  // that never started.
+  assert.equal(h.stored.state.history[0].cutOff, 1)
   assert.ok(h.closed.includes(U))
   assert.equal(h.last().stopReason, 'Stopped by you')
   assert.equal(h.timers.size, 0)
