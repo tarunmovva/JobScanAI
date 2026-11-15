@@ -49,7 +49,7 @@ The README's "Quick start" and "A tour of the app" sections cover each screen.
 
 The jobscan plugin gives a session four tools: `jobscan_status`, `jobscan_action`, `jobscan_note` and `jobscan_wait`. With them it can start six steps: `rebuild_db`, `cancel_rebuild`, `find_jobs`, `find_more`, `rate_jobs` and `stop_loop`. It sees numbers and labels only, and it cannot apply.
 
-1. Install the plugin once, at user scope (ask first: it changes the user's Claude Code or Codex settings). Use this folder's path, or `tarunmovva/JobScanAI` once the repository is on GitHub:
+1. Install the plugin once, at user scope (ask first: it changes the user's Claude Code or Codex settings). Use this folder's path, or `tarunmovva/JobScanAI`, which installs from the GitHub repository's default branch:
    - Claude Code: `claude plugin install jobscan --marketplace <path to this folder>`
    - Codex: `codex plugin marketplace add <path to this folder>`, then `codex plugin add jobscan@jobscan`
 2. The user turns on **Settings → Let Claude Code or Codex drive JobScan** in the app.
